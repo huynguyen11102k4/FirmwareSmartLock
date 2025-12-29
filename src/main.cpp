@@ -100,6 +100,10 @@ bool swipeAddMode = false;
 unsigned long addSwipeTimeout = 0;
 String firstSwipeUid = "";
 
+bool isDoorOpen = false;
+unsigned long doorOpenTime = 0;
+const unsigned long DOOR_AUTO_CLOSE_DELAY = 8000;
+
 bool saveConfig()
 {
   DynamicJsonDocument doc(512);
@@ -322,8 +326,9 @@ void publishState(const String &s, const String &reason = "")
   doc["state"] = s;
   doc["reason"] = reason;
   String out;
-  serializeJson(doc, out);
-  client.publish((mqttTopic + "/state").c_str(), out.c_str());
+  serializeJson(doc, out); 
+  client.publish((mqttTopic + "/state").c_str(), out.c_str(), true);
+  Serial.println("[MQTT] Published state: " + out);
 }
 
 void publishLog(const String &ev, const String &method, const String &det = "")
@@ -337,7 +342,8 @@ void publishLog(const String &ev, const String &method, const String &det = "")
   doc["millis"] = (long)millis();
   String out;
   serializeJson(doc, out);
-  client.publish((mqttTopic + "/log").c_str(), out.c_str());
+  client.publish((mqttTopic + "/log").c_str(), out.c_str(), true);
+  Serial.println("[MQTT] Published log: " + out);
 }
 
 String getUID()
@@ -384,38 +390,16 @@ String pinBuffer = "";
 int failedCount = 0;
 unsigned long lockoutUntil = 0;
 
-bool checkPIN(String pin)
+String getCurrentDateTime()
 {
-  if (pin == masterPasscode)
-    return true;
-  for (int i = 0; i < tempPasscodes.size(); i++)
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo))
   {
-    PasscodeTemp &p = tempPasscodes[i];
-    if (p.code == pin)
-    {
-      if (p.type == "one-time")
-      {
-        tempPasscodes.erase(tempPasscodes.begin() + i);
-        saveTempPasscodes();
-        return true;
-      }
-      if (p.type == "timed")
-      {
-        DynamicJsonDocument doc(256);
-        deserializeJson(doc, p.validity);
-        time_t start = doc["start"] | 0;
-        time_t end = doc["end"] | 0;
-        time_t now = time(nullptr);
-        if (now >= start && now <= end)
-          return true;
-      }
-      else
-      {
-        return true;
-      }
-    }
+    return "01/01/2023 00:00";
   }
-  return false;
+  char buf[20];
+  strftime(buf, sizeof(buf), "%d/%m/%Y %H:%M", &timeinfo);
+  return String(buf);
 }
 
 Servo lockServo;
@@ -457,6 +441,7 @@ void publishPasscodeList()
     return;
   DynamicJsonDocument doc(4096);
   JsonArray array = doc.to<JsonArray>();
+
   if (hasMasterPasscode())
   {
     JsonObject obj = array.createNestedObject();
@@ -465,30 +450,25 @@ void publishPasscodeList()
     obj["validity"] = "";
     obj["status"] = "Active";
   }
-  time_t now = time(nullptr);
-  bool changed = false;
-  for (auto it = tempPasscodes.begin(); it != tempPasscodes.end();)
+
+  for (const auto &pc : tempPasscodes) 
   {
-    bool expired = (it->type == "timed" &&
-                    parseDateTimeToEpoch(it->validity) <= now);
-    if (expired || it->type == "one-time")
-    {
-      it = tempPasscodes.erase(it);
-      changed = true;
-      continue;
-    }
     JsonObject obj = array.createNestedObject();
-    obj["code"] = it->code;
-    obj["type"] = it->type;
-    obj["validity"] = it->validity;
+    obj["code"] = pc.code;
+    obj["type"] = pc.type;
+    obj["validity"] = pc.validity;
     obj["status"] = "Active";
-    ++it;
   }
-  if (changed)
-    saveTempPasscodes();
+  
+
   String payload;
   serializeJson(array, payload);
+  
+  Serial.println("[MQTT] Passcode List Payload being sent:");
+  Serial.println(payload);
+
   client.publish((mqttTopic + "/passcodes/list").c_str(), payload.c_str(), true);
+  Serial.println("[MQTT] Published passcode list.");
 }
 
 void publishICCardList()
@@ -507,6 +487,68 @@ void publishICCardList()
   String out;
   serializeJson(doc, out);
   client.publish((mqttTopic + "/iccards/list").c_str(), out.c_str(), true);
+  Serial.println("[MQTT] Published IC card list.");
+}
+
+bool checkPIN(String pin)
+{
+  if (pin == masterPasscode)
+  {
+    Serial.println("Unlocked with MASTER passcode");
+    publishLog("unlock", "master_pin", pin);
+    return true;
+  }
+  Serial.println("tempPasscodes size: " + String(tempPasscodes.size()));
+
+  for (int i = 0; i < tempPasscodes.size(); i++)
+  {
+    if (tempPasscodes[i].code == pin)
+    {
+      Serial.println("Unlocked with TEMP passcode: " + pin);
+
+      publishLog("unlock", "temp_pin", pin);
+
+      if (tempPasscodes[i].type == "one-time")
+      {
+        tempPasscodes.erase(tempPasscodes.begin() + i);
+        saveTempPasscodes();
+        publishPasscodeList();
+        Serial.println("One-time passcode deleted after use");
+      }
+
+      if (tempPasscodes[i].type == "timed" || tempPasscodes[i].type == "timed-24h")
+      {
+        DynamicJsonDocument doc(256);
+        deserializeJson(doc, tempPasscodes[i].validity);
+
+        String startStr = doc["start"].as<String>();
+        String endStr = doc["end"].as<String>();
+
+        time_t startEpoch = parseDateTimeToEpoch(startStr);
+        time_t endEpoch = parseDateTimeToEpoch(endStr);
+        time_t nowEpoch = time(nullptr);
+
+        if (nowEpoch >= startEpoch && nowEpoch <= endEpoch)
+        {
+          return true;
+        }
+        else
+        {
+          Serial.println("Temp passcode expired");
+          tempPasscodes.erase(tempPasscodes.begin() + i);
+          saveTempPasscodes();
+          publishPasscodeList();
+          return false;
+        }
+      }
+
+      return true;
+    }
+  }
+
+  Serial.println("Wrong PIN");
+  publishLog("wrong_pin", "pin", pin);
+  return false;
 }
 
 class ConfigCallback : public BLECharacteristicCallbacks
@@ -644,7 +686,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
     if (action == "add" && type == "permanent")
     {
       String newCode = doc["code"].as<String>();
-      String oldCode = doc["old_code"] | "123456";
+      String oldCode = doc["old_code"] | "";
 
       Serial.println("[MQTT] New code: " + newCode);
       Serial.println("[MQTT] Has master: " + String(hasMasterPasscode()));
@@ -683,14 +725,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
       pc.type = type;
       if (type == "timed")
       {
-        time_t exp = parseDateTimeToEpoch(doc["validity"].as<String>());
-        pc.validity = String(exp);
+        pc.validity = doc["validity"].as<String>();
       }
       else
         pc.validity = "";
       tempPasscodes.push_back(pc);
       saveTempPasscodes();
       publishPasscodeList();
+      publishLog("temp_passcode_added", "mqtt", pc.code);
       return;
     }
 
@@ -753,12 +795,34 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
       swipeAddMode = true;
       addSwipeTimeout = millis() + 60000;
       firstSwipeUid = "";
-      String notifyTopic = mqttTopic + "iccards/status";
+      String notifyTopic = mqttTopic + "/iccards/status";
       client.publish(notifyTopic.c_str(), "swipe_add_started");
     }
   }
   else if (topicStr == prefix + "/iccards/request")
+  {
     publishICCardList();
+  }
+  else if (topicStr == prefix + "/control")
+  {
+    Serial.println("[MQTT] Processing control command...");
+    DynamicJsonDocument doc(256);
+    if (deserializeJson(doc, payloadStr))
+      return;
+    String action = doc["action"] | "";
+    if (action == "unlock")
+    {
+      Serial.println("[MQTT] Unlock command received.");
+      unlock("remote");
+    }
+    else if (action == "lock")
+    {
+      Serial.println("[MQTT] Lock command received.");
+      lockServo.write(0);
+      publishState("locked", "remote");
+      publishLog("lock", "remote");
+    }
+  }
 }
 
 void reconnect()
@@ -806,7 +870,6 @@ void reconnect()
     Serial.println("\n[MQTT] ✓ Connected successfully!");
     Serial.println("[MQTT] Now subscribing to topics...\n");
 
-    // Subscribe từng topic với kiểm tra
     String topic1 = appConfig.topic_prefix + "/passcodes";
     bool sub1 = client.subscribe(topic1.c_str(), 1);
     Serial.println("[MQTT] Subscribe [" + topic1 + "] -> " + (sub1 ? "OK" : "FAILED"));
@@ -822,6 +885,10 @@ void reconnect()
     String topic4 = appConfig.topic_prefix + "/iccards/request";
     bool sub4 = client.subscribe(topic4.c_str(), 1);
     Serial.println("[MQTT] Subscribe [" + topic4 + "] -> " + (sub4 ? "OK" : "FAILED"));
+
+    String topic5 = appConfig.topic_prefix + "/control";
+    bool sub5 = client.subscribe(topic5.c_str(), 1);
+    Serial.println("[MQTT] Subscribe [" + topic5 + "] -> " + (sub5 ? "OK" : "FAILED"));
 
     Serial.println("\n[MQTT] Callback function address: " + String((unsigned long)mqttCallback, HEX));
     Serial.println("[MQTT] Waiting for messages...\n");
@@ -839,6 +906,10 @@ void reconnect()
     publishBattery();
     publishPasscodeList();
     publishICCardList();
+
+    client.setCallback(mqttCallback);
+    client.setKeepAlive(60);
+    client.setSocketTimeout(20);
 
     Serial.println("========================================\n");
   }
@@ -863,16 +934,18 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
-  // SPIFFS.format();
+  SPIFFS.format();
 
   SPIFFS.begin(true);
   loadMasterPasscode();
   loadList(CARD_FILE, iccards);
   loadTempPasscodes();
 
+  client.setBufferSize(4096);
+
   if (!hasMasterPasscode())
   {
-    masterPasscode = "123456";
+    masterPasscode = "";
     saveMasterPasscode();
   }
 
@@ -983,9 +1056,9 @@ void setup()
     //   Serial.println("MQTT configured");
     // }
     reconnect();
-    client.setCallback(mqttCallback);
-    client.setKeepAlive(60);
-    client.setSocketTimeout(20);
+    // client.setCallback(mqttCallback);
+    // client.setKeepAlive(60);
+    // client.setSocketTimeout(20);
   }
 
   server.on("/info", HTTP_GET, handleInfo);
@@ -1122,6 +1195,42 @@ void loop()
     }
     publishLog("card_scan", "card", uid);
     mfrc522.PICC_HaltA();
+  }
+
+  static unsigned long lastCheck = 0;
+  if (now - lastCheck > 60000)
+  {
+    lastCheck = now;
+
+    time_t nowEpoch = time(nullptr);
+    bool changed = false;
+
+    for (auto it = tempPasscodes.begin(); it != tempPasscodes.end();)
+    {
+      if (it->type == "timed" || it->type == "timed-24h")
+      {
+        DynamicJsonDocument doc(256);
+        deserializeJson(doc, it->validity);
+
+        String endStr = doc["end"].as<String>();
+        time_t endEpoch = parseDateTimeToEpoch(endStr);
+
+        if (endEpoch <= nowEpoch)
+        {
+          Serial.println("[PASSCODE] Auto-expired: " + it->code);
+          it = tempPasscodes.erase(it);
+          changed = true;
+          continue;
+        }
+      }
+      ++it;
+    }
+
+    if (changed)
+    {
+      saveTempPasscodes();
+      publishPasscodeList();
+    }
   }
 
   yield();
