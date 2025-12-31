@@ -1,4 +1,4 @@
-#include "WifiManager.h"
+#include "network/WifiManager.h"
 
 #include "utils/Logger.h"
 
@@ -30,8 +30,9 @@ WifiManager::loop()
     if (WiFi.status() == WL_CONNECTED)
         return;
 
-    if (millis() - lastAttempt < 5000)
+    if ((uint32_t)(millis() - lastAttempt) < 5000)
         return;
+
     lastAttempt = millis();
 
     Logger::warn("WiFi", "Reconnecting...");

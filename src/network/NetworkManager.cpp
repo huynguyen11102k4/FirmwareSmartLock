@@ -1,4 +1,4 @@
-#include "NetworkManager.h"
+#include "network/NetworkManager.h"
 
 #include "network/MqttManager.h"
 #include "network/OtaManager.h"
@@ -11,6 +11,7 @@ NetworkManager::begin(const AppConfig& cfg, const String& clientId)
 {
     WifiManager::begin(cfg);
     MqttManager::begin(cfg, clientId);
+    otaStarted = false;
 }
 
 void

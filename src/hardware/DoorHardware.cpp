@@ -1,5 +1,7 @@
 #include "hardware/DoorHardware.h"
 
+#include "config/LockConfig.h"
+
 DoorHardware::DoorHardware(
     Servo& servo, uint8_t ledPin, uint8_t servoPin, uint8_t contactPin, bool contactActiveLow,
     uint32_t contactDebounceMs, bool contactUsePullup
@@ -19,7 +21,6 @@ DoorHardware::begin(AppContext& ctx)
     contact_.setCallback([this](bool isOpen) { onDoorContactChanged_(isOpen); });
     contact_.begin(ctx);
 
-    // Sync initial state into lock module
     lock_.onDoorContactChanged(contact_.isOpen());
 }
 
@@ -60,9 +61,18 @@ DoorHardware::onDoorContactChanged_(bool isOpen)
 
     lock_.onDoorContactChanged(isOpen);
 
-    // Rule: door CLOSED (magnet touched / button pressed) => LOCK immediately
     if (!isOpen && !ctx_->app.doorLock.isLocked())
     {
-        lock_.lock(*ctx_, "door_closed");
+        const uint32_t delayMs = ctx_->lock.autoRelockDelayMs;
+
+        if (delayMs == 0)
+        {
+            lock_.lock(*ctx_, "door_closed");
+        }
+        else
+        {
+            ctx_->app.doorLock.rearmAutoRelock(delayMs);
+            ctx_->publish.publishLog("relock_scheduled", "door_closed", String(delayMs) + "ms");
+        }
     }
 }

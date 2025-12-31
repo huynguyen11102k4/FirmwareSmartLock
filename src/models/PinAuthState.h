@@ -3,13 +3,9 @@
 
 struct PinAuthState
 {
-    String buffer = "";          // Buffer chứa PIN đang nhập
-    int failedCount = 0;         // Số lần nhập sai liên tiếp
-    uint32_t lockoutUntilMs = 0; // Thời điểm hết lockout (millis)
-
-    static constexpr int MAX_PIN_LENGTH = 10;
-    static constexpr int MAX_FAILED_ATTEMPTS = 5;
-    static constexpr uint32_t LOCKOUT_DURATION_MS = 30000; // 30s
+    String buffer = "";
+    int failedCount = 0;
+    uint32_t lockoutUntilMs = 0;
 
     void
     clearBuffer()
@@ -18,12 +14,11 @@ struct PinAuthState
     }
 
     bool
-    appendDigit(char digit)
+    appendDigit(char digit, int maxLen)
     {
-        if (buffer.length() >= MAX_PIN_LENGTH)
-        {
+        if ((int)buffer.length() >= maxLen)
             return false;
-        }
+
         buffer += digit;
         return true;
     }
@@ -37,19 +32,22 @@ struct PinAuthState
     bool
     isLockedOut() const
     {
-        return millis() < lockoutUntilMs;
+        if (lockoutUntilMs == 0)
+            return false;
+
+        return (int32_t)(millis() - lockoutUntilMs) < 0;
     }
 
     bool
-    recordFailedAttempt()
+    recordFailedAttempt(int maxFailedAttempts, uint32_t lockoutDurationMs)
     {
         failedCount++;
 
-        if (failedCount >= MAX_FAILED_ATTEMPTS)
+        if (failedCount >= maxFailedAttempts)
         {
-            lockoutUntilMs = millis() + LOCKOUT_DURATION_MS;
-            failedCount = 0; // Reset counter
-            return true;     // Locked out
+            lockoutUntilMs = millis() + lockoutDurationMs;
+            failedCount = 0;
+            return true;
         }
 
         return false;
@@ -68,7 +66,12 @@ struct PinAuthState
     {
         if (!isLockedOut())
             return 0;
-        return (lockoutUntilMs - millis()) / 1000;
+
+        const int32_t msLeft = (int32_t)(lockoutUntilMs - millis());
+        if (msLeft <= 0)
+            return 0;
+
+        return (uint32_t)(msLeft / 1000);
     }
 
     void

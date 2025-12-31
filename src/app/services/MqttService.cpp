@@ -4,19 +4,31 @@
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
 #include "utils/JsonUtils.h"
+#include "utils/SecureCompare.h"
 
 #include <ArduinoJson.h>
+
+namespace
+{
+String
+maskCode(const String& code)
+{
+    if (code.isEmpty())
+        return "";
+    if (code.length() <= 2)
+        return "****";
+    return String("****") + code.substring(code.length() - 2);
+}
+} // namespace
 
 MqttService* MqttService::s_instance_ = nullptr;
 
 MqttService::MqttService(
     AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
-    std::vector<String>& iccardsCache, PublishService& publish, void* ctx, SyncFn syncIccardsCache,
-    BatteryFn readBatteryPercent, DoorHardware& door
+    PublishService& publish, const LockConfig& lockConfig, DoorHardware& door
 )
-    : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo), iccardsCache_(iccardsCache),
-      publish_(publish), ctx_(ctx), syncIccardsCache_(syncIccardsCache),
-      readBatteryPercent_(readBatteryPercent), door_(door)
+    : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo), publish_(publish),
+      lockConfig_(lockConfig), door_(door)
 {
 }
 
@@ -38,11 +50,9 @@ MqttService::onConnected(int infoVersion)
     MqttManager::subscribe(Topics::iccardsReq(base), 1);
     MqttManager::subscribe(Topics::control(base), 1);
 
-    const int batt = readBatteryPercent_ ? readBatteryPercent_(ctx_) : 0;
-    publish_.publishInfo(batt, infoVersion);
+    publish_.publishInfo(/*batteryPercent=*/0, infoVersion);
 
     publish_.publishState("locked", "startup");
-    publish_.publishBattery(batt);
     publish_.publishPasscodeList();
     publish_.publishICCardList();
 }
@@ -70,12 +80,16 @@ MqttService::dispatch_(const String& topicStr, const String& payloadStr)
 
     if (topicStr == Topics::passcodes(base))
         return handlePasscodesTopic_(payloadStr);
+
     if (topicStr == Topics::passcodesReq(base))
         return publish_.publishPasscodeList();
+
     if (topicStr == Topics::iccards(base))
         return handleIccardsTopic_(payloadStr);
+
     if (topicStr == Topics::iccardsReq(base))
         return publish_.publishICCardList();
+
     if (topicStr == Topics::control(base))
         return handleControlTopic_(payloadStr);
 }
@@ -95,20 +109,22 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         const String newCode = doc["code"] | "";
         const String oldCode = doc["old_code"] | "";
 
+        if (newCode.length() < (size_t)lockConfig_.minPinLength ||
+            newCode.length() > (size_t)lockConfig_.maxPinLength)
+            return;
+
         const String current = passRepo_.getMaster();
-        const bool hasMaster = current.length() >= 4;
+        const bool hasMaster = current.length() >= (size_t)lockConfig_.minPinLength;
 
         if (!hasMaster)
         {
-            if (newCode.length() < 4 || newCode.length() > 10)
-                return;
             passRepo_.setMaster(newCode);
             publish_.publishPasscodeList();
-            publish_.publishLog("master_set", "first_time", newCode);
+            publish_.publishLog("master_set", "mqtt", "");
             return;
         }
 
-        if (oldCode.isEmpty() || oldCode != current)
+        if (oldCode.isEmpty() || !SecureCompare::safeEquals(oldCode, current))
         {
             MqttManager::publish(
                 Topics::passcodesError(appState_.mqttTopicPrefix),
@@ -119,7 +135,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
 
         passRepo_.setMaster(newCode);
         publish_.publishPasscodeList();
-        publish_.publishLog("master_changed", "success", "");
+        publish_.publishLog("master_changed", "mqtt", "");
         return;
     }
 
@@ -129,9 +145,13 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         t.code = doc["code"] | "";
         t.expireAt = (uint64_t)(doc["expireAt"] | 0);
 
+        if (t.code.length() < (size_t)lockConfig_.minPinLength ||
+            t.code.length() > (size_t)lockConfig_.maxPinLength)
+            return;
+
         passRepo_.setTemp(t);
         publish_.publishPasscodeList();
-        publish_.publishLog("temp_passcode_added", "mqtt", t.code);
+        publish_.publishLog("temp_passcode_added", "mqtt", maskCode(t.code));
         return;
     }
 
@@ -139,17 +159,20 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
     {
         const String code = doc["code"] | "";
 
-        if (passRepo_.getMaster().length() >= 4 && code == passRepo_.getMaster())
+        if (passRepo_.getMaster().length() >= (size_t)lockConfig_.minPinLength &&
+            SecureCompare::safeEquals(code, passRepo_.getMaster()))
         {
             passRepo_.setMaster("");
             publish_.publishPasscodeList();
+            publish_.publishLog("master_deleted", "mqtt", "");
             return;
         }
 
-        if (passRepo_.hasTemp() && code == passRepo_.getTemp().code)
+        if (passRepo_.hasTemp() && SecureCompare::safeEquals(code, passRepo_.getTemp().code))
         {
             passRepo_.clearTemp();
             publish_.publishPasscodeList();
+            publish_.publishLog("temp_deleted", "mqtt", "");
             return;
         }
     }
@@ -165,7 +188,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
     const String action = doc["action"] | "";
     const String id = doc["id"] | "";
 
-    if (action == "add" && id.length() > 0)
+    if (action == "add" && !id.isEmpty())
     {
         String uid = id;
         uid.replace(":", "");
@@ -173,8 +196,6 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
         if (cardRepo_.add(uid))
         {
-            if (syncIccardsCache_)
-                syncIccardsCache_(ctx_);
             publish_.publishICCardList();
             publish_.publishLog("card_added", "mqtt", uid);
         }
@@ -189,8 +210,6 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
         if (cardRepo_.remove(uid))
         {
-            if (syncIccardsCache_)
-                syncIccardsCache_(ctx_);
             publish_.publishICCardList();
             publish_.publishLog("card_deleted", "mqtt", uid);
         }
@@ -199,7 +218,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
     if (action == "start_swipe_add")
     {
-        appState_.swipeAdd.start();
+        appState_.swipeAdd.start(lockConfig_.swipeAddTimeoutMs);
         appState_.runtimeFlags.swipeAddMode = true;
         MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_started");
         return;

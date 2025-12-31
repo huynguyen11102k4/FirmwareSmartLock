@@ -1,4 +1,4 @@
-#include "FileSystem.h"
+#include "storage/FileSystem.h"
 
 #include <SPIFFS.h>
 
@@ -24,6 +24,7 @@ FileSystem::readFile(const char* path)
     String content;
     while (f.available())
         content += char(f.read());
+
     f.close();
     return content;
 }
@@ -34,6 +35,7 @@ FileSystem::writeFile(const char* path, const String& content)
     File f = SPIFFS.open(path, "w");
     if (!f)
         return false;
+
     f.print(content);
     f.close();
     return true;

@@ -1,24 +1,32 @@
-#include "CardRepository.h"
+#include "storage/CardRepository.h"
 
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 
+#include <ArduinoJson.h>
+
 bool
 CardRepository::load()
 {
-    _cards.clear();
+    cards_.clear();
+
     if (!FileSystem::exists(PATH))
         return true;
 
-    String json = FileSystem::readFile(PATH);
+    const String json = FileSystem::readFile(PATH);
     DynamicJsonDocument doc(512);
+
     if (!JsonUtils::deserialize(json, doc))
         return false;
 
-    for (JsonVariant v : doc["cards"].as<JsonArray>())
+    if (doc.containsKey(AppJsonKeys::CARDS) && doc[AppJsonKeys::CARDS].is<JsonArray>())
     {
-        _cards.push_back(v.as<String>());
+        for (JsonVariant v : doc[AppJsonKeys::CARDS].as<JsonArray>())
+        {
+            cards_.push_back(v.as<String>());
+        }
     }
+
     return true;
 }
 
@@ -26,18 +34,22 @@ bool
 CardRepository::save()
 {
     DynamicJsonDocument doc(512);
-    JsonArray arr = doc.createNestedArray("cards");
-    for (auto& c : _cards)
+    JsonArray arr = doc.createNestedArray(AppJsonKeys::CARDS);
+
+    for (const auto& c : cards_)
         arr.add(c);
+
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
 bool
 CardRepository::exists(const String& uid) const
 {
-    for (auto& c : _cards)
+    for (const auto& c : cards_)
+    {
         if (c == uid)
             return true;
+    }
     return false;
 }
 
@@ -46,20 +58,39 @@ CardRepository::add(const String& uid)
 {
     if (exists(uid))
         return false;
-    _cards.push_back(uid);
+
+    cards_.push_back(uid);
     return save();
 }
 
 bool
 CardRepository::remove(const String& uid)
 {
-    for (auto it = _cards.begin(); it != _cards.end(); ++it)
+    for (auto it = cards_.begin(); it != cards_.end(); ++it)
     {
         if (*it == uid)
         {
-            _cards.erase(it);
+            cards_.erase(it);
             return save();
         }
     }
     return false;
+}
+
+const std::vector<String>&
+CardRepository::list() const
+{
+    return cards_;
+}
+
+bool
+CardRepository::isEmpty() const
+{
+    return cards_.empty();
+}
+
+size_t
+CardRepository::size() const
+{
+    return cards_.size();
 }

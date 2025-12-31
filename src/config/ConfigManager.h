@@ -1,17 +1,19 @@
 #pragma once
-#include "AppConfig.h"
-#include "ConfigRepository.h"
+#include "config/AppConfig.h"
+#include "config/ConfigRepository.h"
 
 class ConfigManager
 {
   public:
     bool
     load();
+
     void
     save();
 
     bool
     isProvisioned() const;
+
     const AppConfig&
     get() const;
 

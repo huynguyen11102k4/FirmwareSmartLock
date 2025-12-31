@@ -1,23 +1,19 @@
 #pragma once
 #include "app/services/PublishService.h"
+#include "config/LockConfig.h"
 #include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "storage/CardRepository.h"
 #include "storage/PasscodeRepository.h"
 
 #include <Arduino.h>
-#include <vector>
 
 class MqttService
 {
   public:
-    using SyncFn = void (*)(void* ctx);
-    using BatteryFn = int (*)(void* ctx);
-
     MqttService(
         AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
-        std::vector<String>& iccardsCache, PublishService& publish, void* ctx,
-        SyncFn syncIccardsCache, BatteryFn readBatteryPercent, DoorHardware& door
+        PublishService& publish, const LockConfig& lockConfig, DoorHardware& door
     );
 
     void
@@ -35,21 +31,18 @@ class MqttService
 
     void
     handlePasscodesTopic_(const String& payloadStr);
+
     void
     handleIccardsTopic_(const String& payloadStr);
+
     void
     handleControlTopic_(const String& payloadStr);
 
     AppState& appState_;
     PasscodeRepository& passRepo_;
     CardRepository& cardRepo_;
-    std::vector<String>& iccardsCache_;
     PublishService& publish_;
-
-    void* ctx_{nullptr};
-    SyncFn syncIccardsCache_{nullptr};
-    BatteryFn readBatteryPercent_{nullptr};
-
+    const LockConfig& lockConfig_;
     DoorHardware& door_;
 
     static MqttService* s_instance_;

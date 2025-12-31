@@ -8,10 +8,23 @@
 
 #include <ArduinoJson.h>
 
+namespace
+{
+String
+maskCode(const String& code)
+{
+    if (code.isEmpty())
+        return "";
+    if (code.length() <= 2)
+        return "****";
+    return String("****") + code.substring(code.length() - 2);
+}
+} // namespace
+
 PublishService::PublishService(
-    AppState& appState, PasscodeRepository& passRepo, std::vector<String>& iccardsCache
+    AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo
 )
-    : appState_(appState), passRepo_(passRepo), iccardsCache_(iccardsCache)
+    : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo)
 {
 }
 
@@ -68,7 +81,7 @@ PublishService::publishPasscodeList()
     if (master.length() >= 4)
     {
         JsonObject obj = array.createNestedObject();
-        obj["code"] = master;
+        obj["code"] = maskCode(master);
         obj["type"] = "permanent";
         obj["validity"] = "";
         obj["status"] = "Active";
@@ -76,9 +89,9 @@ PublishService::publishPasscodeList()
 
     if (passRepo_.hasTemp())
     {
-        PasscodeTemp t = passRepo_.getTemp();
+        const PasscodeTemp t = passRepo_.getTemp();
         JsonObject obj = array.createNestedObject();
-        obj["code"] = t.code;
+        obj["code"] = maskCode(t.code);
         obj["type"] = "temp";
         obj["validity"] = String(t.expireAt);
         obj["status"] = t.isExpired(TimeUtils::nowSeconds()) ? "Expired" : "Active";
@@ -98,7 +111,8 @@ PublishService::publishICCardList()
     DynamicJsonDocument doc(2048);
     JsonArray arr = doc.to<JsonArray>();
 
-    for (const String& card : iccardsCache_)
+    const std::vector<String>& cards = cardRepo_.list();
+    for (const String& card : cards)
     {
         JsonObject obj = arr.createNestedObject();
         obj["id"] = card;

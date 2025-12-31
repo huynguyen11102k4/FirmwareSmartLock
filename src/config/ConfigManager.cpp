@@ -1,4 +1,4 @@
-#include "ConfigManager.h"
+#include "config/ConfigManager.h"
 
 bool
 ConfigManager::load()

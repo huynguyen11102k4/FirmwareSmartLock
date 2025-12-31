@@ -12,5 +12,5 @@ enum class AuthResultType : uint8_t
 struct AuthResult
 {
     AuthResultType result;
-    String reason; // optional (log / debug)
+    String reason;
 };

@@ -10,9 +10,7 @@ struct DoorLockState
     };
 
     State state = State::LOCKED;
-    uint32_t relockAtMs = 0; // Thời điểm tự động khóa lại (millis)
-
-    static constexpr uint32_t DEFAULT_UNLOCK_DURATION_MS = 5000; // 5s
+    uint32_t relockAtMs = 0;
 
     bool
     isLocked() const
@@ -27,10 +25,18 @@ struct DoorLockState
     }
 
     void
-    unlock(uint32_t durationMs = DEFAULT_UNLOCK_DURATION_MS)
+    unlock(uint32_t durationMs)
     {
         state = State::UNLOCKED;
         relockAtMs = millis() + durationMs;
+    }
+
+    void
+    rearmAutoRelock(uint32_t delayMs)
+    {
+        if (state != State::UNLOCKED)
+            return;
+        relockAtMs = millis() + delayMs;
     }
 
     void
@@ -44,10 +50,9 @@ struct DoorLockState
     shouldAutoRelock() const
     {
         if (state != State::UNLOCKED)
-        {
             return false;
-        }
-        return millis() >= relockAtMs;
+
+        return (int32_t)(millis() - relockAtMs) >= 0;
     }
 
     uint32_t
@@ -55,9 +60,12 @@ struct DoorLockState
     {
         if (state != State::UNLOCKED)
             return 0;
-        if (millis() >= relockAtMs)
+
+        const int32_t msLeft = (int32_t)(relockAtMs - millis());
+        if (msLeft <= 0)
             return 0;
-        return (relockAtMs - millis()) / 1000;
+
+        return (uint32_t)(msLeft / 1000);
     }
 
     const char*

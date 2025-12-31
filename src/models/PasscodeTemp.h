@@ -5,7 +5,7 @@
 struct PasscodeTemp
 {
     String code;
-    uint64_t expireAt; // epoch seconds
+    uint64_t expireAt;
 
     bool
     isExpired(uint64_t now) const

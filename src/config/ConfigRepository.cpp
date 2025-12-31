@@ -1,8 +1,10 @@
-#include "ConfigRepository.h"
+#include "config/ConfigRepository.h"
 
-#include "AppPaths.h"
+#include "config/AppPaths.h"
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
+
+#include <ArduinoJson.h>
 
 bool
 ConfigRepository::exists() const
@@ -16,8 +18,9 @@ ConfigRepository::load(AppConfig& cfg)
     if (!exists())
         return false;
 
-    String json = FileSystem::readFile(AppPaths::CONFIG_JSON);
+    const String json = FileSystem::readFile(AppPaths::CONFIG_JSON);
     DynamicJsonDocument doc(512);
+
     if (!JsonUtils::deserialize(json, doc))
         return false;
 
@@ -32,6 +35,7 @@ ConfigRepository::load(AppConfig& cfg)
 
     if (!temp.isValid())
         return false;
+
     cfg = temp;
     return true;
 }

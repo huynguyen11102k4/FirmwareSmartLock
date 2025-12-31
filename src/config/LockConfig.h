@@ -7,29 +7,23 @@
 
 struct LockConfig
 {
-    // Door lock timing
     uint32_t unlockDurationMs = 5000;
     uint32_t autoRelockDelayMs = 5000;
 
-    // PIN security
     int maxFailedAttempts = 5;
     uint32_t lockoutDurationMs = 30000;
     int minPinLength = 4;
     int maxPinLength = 10;
 
-    // RFID
     uint32_t rfidDebounceMs = 2000;
     uint32_t swipeAddTimeoutMs = 60000;
 
-    // Battery
     uint32_t batteryPublishIntervalMs = 60000;
     float batteryMinVoltage = 3.3f;
     float batteryMaxVoltage = 4.2f;
 
-    // Sync
     uint32_t syncIntervalMs = 300000;
 
-    // Network
     uint32_t mqttReconnectBaseMs = 1000;
     uint32_t mqttReconnectMaxMs = 60000;
     uint32_t wifiReconnectDelayMs = 5000;
@@ -42,7 +36,7 @@ struct LockConfig
         if (!FileSystem::exists(CONFIG_PATH))
             return false;
 
-        String json = FileSystem::readFile(CONFIG_PATH);
+        const String json = FileSystem::readFile(CONFIG_PATH);
         auto& doc = JsonPool::acquireLarge();
 
         if (!JsonUtils::deserialize(json, doc))

@@ -24,10 +24,7 @@ DoorContactModule::readOpenRaw_() const
 {
     const int v = digitalRead(pin_);
 
-    // Default: HIGH=open, LOW=closed (typical INPUT_PULLUP wiring).
     bool open = (v == HIGH);
-
-    // If wiring is inverted, flip it.
     if (activeLow_)
         open = !open;
 
@@ -59,7 +56,7 @@ DoorContactModule::loop(AppContext&)
     if (rawOpen == isOpen_)
         return;
 
-    if (millis() - lastChangeMs_ < debounceMs_)
+    if ((uint32_t)(millis() - lastChangeMs_) < debounceMs_)
         return;
 
     isOpen_ = rawOpen;

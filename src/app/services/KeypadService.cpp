@@ -18,13 +18,23 @@ static char KEYS[ROWS][COLS] = {
 
 static byte ROW_PINS[ROWS] = {KEYPAD_ROW_1, KEYPAD_ROW_2, KEYPAD_ROW_3, KEYPAD_ROW_4};
 static byte COL_PINS[COLS] = {KEYPAD_COL_1, KEYPAD_COL_2, KEYPAD_COL_3, KEYPAD_COL_4};
+
+String
+maskPinForLog(const String& pin)
+{
+    if (pin.isEmpty())
+        return "****";
+    const int keep = min(2, (int)pin.length());
+    return pin.substring(0, keep) + "****";
+}
 } // namespace
 
 KeypadService::KeypadService(
-    AppState& appState, PasscodeRepository& passRepo, PublishService& publish, DoorHardware& door
+    AppState& appState, PasscodeRepository& passRepo, PublishService& publish, DoorHardware& door,
+    const LockConfig& lockConfig
 )
     : appState_(appState), passRepo_(passRepo), publish_(publish), door_(door),
-      keypad_(makeKeymap(KEYS), ROW_PINS, COL_PINS, ROWS, COLS)
+      lockConfig_(lockConfig), keypad_(makeKeymap(KEYS), ROW_PINS, COL_PINS, ROWS, COLS)
 {
 }
 
@@ -38,8 +48,8 @@ KeypadService::checkPIN_(const String& pin)
 {
     const String master = passRepo_.getMaster();
 
-    // ✅ Use constant-time comparison to prevent timing attacks
-    if (master.length() >= 4 && SecureCompare::safeEquals(pin, master))
+    if (master.length() >= (size_t)lockConfig_.minPinLength &&
+        SecureCompare::safeEquals(pin, master))
     {
         publish_.publishLog("unlock", "master_pin", "****");
         return true;
@@ -47,7 +57,7 @@ KeypadService::checkPIN_(const String& pin)
 
     if (passRepo_.hasTemp())
     {
-        PasscodeTemp t = passRepo_.getTemp();
+        const PasscodeTemp t = passRepo_.getTemp();
 
         if (t.isExpired(TimeUtils::nowSeconds()))
         {
@@ -56,7 +66,6 @@ KeypadService::checkPIN_(const String& pin)
             return false;
         }
 
-        // ✅ Use constant-time comparison
         if (SecureCompare::safeEquals(pin, t.code))
         {
             publish_.publishLog("unlock", "temp_pin", "****");
@@ -66,9 +75,7 @@ KeypadService::checkPIN_(const String& pin)
         }
     }
 
-    // ✅ Log masked PIN (first 2 digits only for debugging)
-    String maskedPin = pin.substring(0, min(2, (int)pin.length())) + "****";
-    publish_.publishLog("wrong_pin", "pin", maskedPin);
+    publish_.publishLog("wrong_pin", "pin", maskPinForLog(pin));
     return false;
 }
 
@@ -92,6 +99,25 @@ KeypadService::loop()
     {
         const String pin = appState_.pinAuth.getBuffer();
 
+        if ((int)pin.length() < lockConfig_.minPinLength)
+        {
+            const bool lockedOut = appState_.pinAuth.recordFailedAttempt(
+                lockConfig_.maxFailedAttempts, lockConfig_.lockoutDurationMs
+            );
+
+            publish_.publishLog("wrong_pin", "pin", maskPinForLog(pin));
+            if (lockedOut)
+            {
+                publish_.publishLog(
+                    "pin_lockout", "security",
+                    "Locked for " + String(appState_.pinAuth.remainingLockoutSeconds()) + "s"
+                );
+            }
+
+            appState_.pinAuth.clearBuffer();
+            return;
+        }
+
         if (checkPIN_(pin))
         {
             appState_.pinAuth.recordSuccess();
@@ -99,7 +125,10 @@ KeypadService::loop()
         }
         else
         {
-            const bool lockedOut = appState_.pinAuth.recordFailedAttempt();
+            const bool lockedOut = appState_.pinAuth.recordFailedAttempt(
+                lockConfig_.maxFailedAttempts, lockConfig_.lockoutDurationMs
+            );
+
             if (lockedOut)
             {
                 publish_.publishLog(
@@ -115,6 +144,6 @@ KeypadService::loop()
 
     if (k >= '0' && k <= '9')
     {
-        appState_.pinAuth.appendDigit(k);
+        appState_.pinAuth.appendDigit(k, lockConfig_.maxPinLength);
     }
 }

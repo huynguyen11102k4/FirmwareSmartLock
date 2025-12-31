@@ -10,14 +10,15 @@ enum class CommandType : uint8_t
     REMOVE_CARD,
     SET_PASSCODE,
     SET_TEMP_PASSCODE,
-    OTA
+    OTA,
+    APPLY_CONFIG
 };
 
 struct Command
 {
     CommandType type = CommandType::NONE;
     String source;
-    String payload; // JSON string
+    String payload;
 
     bool
     isValid() const

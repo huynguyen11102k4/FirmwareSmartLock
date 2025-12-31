@@ -1,5 +1,6 @@
 #pragma once
 #include "app/services/PublishService.h"
+#include "config/LockConfig.h"
 #include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "storage/PasscodeRepository.h"
@@ -12,7 +13,7 @@ class KeypadService
   public:
     KeypadService(
         AppState& appState, PasscodeRepository& passRepo, PublishService& publish,
-        DoorHardware& door
+        DoorHardware& door, const LockConfig& lockConfig
     );
 
     void
@@ -29,6 +30,7 @@ class KeypadService
     PasscodeRepository& passRepo_;
     PublishService& publish_;
     DoorHardware& door_;
+    const LockConfig& lockConfig_;
 
     Keypad keypad_;
 };

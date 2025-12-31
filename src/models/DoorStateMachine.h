@@ -1,12 +1,13 @@
 #pragma once
 #include <Arduino.h>
+#include <functional>
 
 enum class DoorFSMState : uint8_t
 {
-    LOCKED_CLOSED,   // Normal locked state
-    LOCKED_OPEN,     // ALARM! Door forced open
-    UNLOCKED_CLOSED, // Door unlocked, waiting for open
-    UNLOCKED_OPEN    // Normal operation: door opened after unlock
+    LOCKED_CLOSED,
+    LOCKED_OPEN,
+    UNLOCKED_CLOSED,
+    UNLOCKED_OPEN
 };
 
 enum class DoorEvent : uint8_t
@@ -60,7 +61,6 @@ class DoorStateMachine
                 }
                 else if (event == DoorEvent::DOOR_OPENED)
                 {
-                    // ALARM: Door forced open while locked!
                     state_ = DoorFSMState::LOCKED_OPEN;
                     alarmActive_ = true;
                 }
@@ -74,7 +74,6 @@ class DoorStateMachine
                 }
                 else if (event == DoorEvent::UNLOCK_COMMAND)
                 {
-                    // Clear alarm if user unlocks
                     state_ = DoorFSMState::UNLOCKED_OPEN;
                     alarmActive_ = false;
                 }
@@ -94,12 +93,10 @@ class DoorStateMachine
             case DoorFSMState::UNLOCKED_OPEN:
                 if (event == DoorEvent::DOOR_CLOSED)
                 {
-                    // Auto-lock when door closes
                     state_ = DoorFSMState::LOCKED_CLOSED;
                 }
                 else if (event == DoorEvent::LOCK_COMMAND)
                 {
-                    // Manual lock while door is open
                     state_ = DoorFSMState::LOCKED_OPEN;
                 }
                 break;

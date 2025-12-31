@@ -1,11 +1,15 @@
-#include "PasscodeRepository.h"
+#include "storage/PasscodeRepository.h"
 
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 
+#include <ArduinoJson.h>
+
 bool
 PasscodeRepository::load()
 {
+    hasTemp_ = false;
+
     if (!FileSystem::exists(PATH))
         return true;
 
@@ -13,68 +17,74 @@ PasscodeRepository::load()
     if (!JsonUtils::deserialize(FileSystem::readFile(PATH), doc))
         return false;
 
-    _master = doc["master"] | "";
+    master_ = doc["master"] | "";
 
-    if (doc.containsKey("temp"))
+    if (doc.containsKey("temp") && doc["temp"].is<JsonObject>())
     {
-        _temp = PasscodeTemp::fromJson(doc["temp"]);
-        _hasTemp = true;
+        temp_ = PasscodeTemp::fromJson(doc["temp"]);
+        hasTemp_ = true;
     }
+
     return true;
 }
 
 String
 PasscodeRepository::getMaster() const
 {
-    return _master;
+    return master_;
 }
 
 bool
 PasscodeRepository::setMaster(const String& pass)
 {
-    _master = pass;
+    master_ = pass;
 
     DynamicJsonDocument doc(512);
-    doc["master"] = _master;
-    if (_hasTemp)
+    doc["master"] = master_;
+
+    if (hasTemp_)
     {
         JsonObject t = doc.createNestedObject("temp");
-        _temp.toJson(t);
+        temp_.toJson(t);
     }
+
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
 bool
 PasscodeRepository::hasTemp() const
 {
-    return _hasTemp;
+    return hasTemp_;
 }
 
 PasscodeTemp
 PasscodeRepository::getTemp() const
 {
-    return _temp;
+    return temp_;
 }
 
 bool
 PasscodeRepository::setTemp(const PasscodeTemp& temp)
 {
-    _temp = temp;
-    _hasTemp = true;
+    temp_ = temp;
+    hasTemp_ = true;
 
     DynamicJsonDocument doc(512);
-    doc["master"] = _master;
+    doc["master"] = master_;
+
     JsonObject t = doc.createNestedObject("temp");
-    _temp.toJson(t);
+    temp_.toJson(t);
+
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
 bool
 PasscodeRepository::clearTemp()
 {
-    _hasTemp = false;
+    hasTemp_ = false;
 
     DynamicJsonDocument doc(512);
-    doc["master"] = _master;
+    doc["master"] = master_;
+
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }

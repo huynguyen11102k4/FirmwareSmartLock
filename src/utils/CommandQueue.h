@@ -63,34 +63,6 @@ class CommandQueue
         return success;
     }
 
-    bool
-    isEmpty()
-    {
-        if (!mutex_)
-            return true;
-
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) != pdTRUE)
-            return true;
-
-        bool empty = queue_.empty();
-        xSemaphoreGive(mutex_);
-        return empty;
-    }
-
-    size_t
-    size()
-    {
-        if (!mutex_)
-            return 0;
-
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) != pdTRUE)
-            return 0;
-
-        size_t s = queue_.size();
-        xSemaphoreGive(mutex_);
-        return s;
-    }
-
     void
     clear()
     {

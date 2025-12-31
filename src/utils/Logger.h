@@ -17,10 +17,13 @@ class Logger
 
     static void
     error(const char* tag, const char* fmt, ...);
+
     static void
     warn(const char* tag, const char* fmt, ...);
+
     static void
     info(const char* tag, const char* fmt, ...);
+
     static void
     debug(const char* tag, const char* fmt, ...);
 
@@ -28,7 +31,7 @@ class Logger
     setLevel(LogLevel level);
 
   private:
-    static LogLevel _level;
+    static LogLevel level_;
     static void
     log(LogLevel level, const char* tag, const char* fmt, va_list args);
 };

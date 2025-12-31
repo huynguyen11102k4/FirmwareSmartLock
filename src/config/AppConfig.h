@@ -46,6 +46,7 @@ struct AppConfig
             wifiSsid.clear();
             wifiPass.clear();
         }
+
         if (mode == ClearMode::ALL || mode == ClearMode::MQTT_ONLY)
         {
             mqttHost.clear();

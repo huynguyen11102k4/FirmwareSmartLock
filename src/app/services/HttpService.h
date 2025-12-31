@@ -13,12 +13,14 @@ class HttpService
 
     void
     begin();
+
     void
     loop();
 
   private:
     void
     handleInfo_();
+
     void
     handleNotFound_();
 

@@ -8,11 +8,13 @@ class WifiManager
   public:
     static void
     begin(const AppConfig& cfg);
+
     static void
     loop();
 
     static bool
     connected();
+
     static String
     ip();
 

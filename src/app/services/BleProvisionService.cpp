@@ -1,8 +1,7 @@
 #include "app/services/BleProvisionService.h"
 
-#include "app/services/MqttService.h"
 #include "config/AppPaths.h"
-#include "network/NetworkManager.h"
+#include "models/Command.h"
 #include "utils/JsonUtils.h"
 
 #include <ArduinoJson.h>
@@ -10,9 +9,9 @@
 #include <BLEUtils.h>
 
 BleProvisionService::BleProvisionService(
-    AppState& appState, ConfigManager& cfgMgr, MqttService& mqttSvc
+    AppState& appState, ConfigManager& cfgMgr, CommandQueue& cmdQueue
 )
-    : appState_(appState), cfgMgr_(cfgMgr), mqttSvc_(mqttSvc)
+    : appState_(appState), cfgMgr_(cfgMgr), cmdQueue_(cmdQueue)
 {
 }
 
@@ -21,6 +20,7 @@ BleProvisionService::disableIfActive()
 {
     if (!appState_.runtimeFlags.bleActive)
         return;
+
     appState_.runtimeFlags.bleActive = false;
     BLEDevice::deinit(true);
     delay(300);
@@ -50,8 +50,8 @@ BleProvisionService::parseBleConfigJsonToAppConfig_(const String& json, AppConfi
 
     if (host.isEmpty() && doc.containsKey("mqtt_broker"))
     {
-        String broker = doc["mqtt_broker"] | "";
-        int colon = broker.indexOf(':');
+        const String broker = doc["mqtt_broker"] | "";
+        const int colon = broker.indexOf(':');
         if (colon != -1)
         {
             host = broker.substring(0, colon);
@@ -76,8 +76,8 @@ BleProvisionService::parseBleConfigJsonToAppConfig_(const String& json, AppConfi
 void
 BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
 {
-    std::string value = c->getValue();
-    String json(value.c_str());
+    const std::string value = c->getValue();
+    const String json(value.c_str());
 
     AppConfig newCfg;
     if (!svc_.parseBleConfigJsonToAppConfig_(json, newCfg))
@@ -96,12 +96,20 @@ BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
 
     svc_.setBaseTopicFromConfigOrDefault_();
 
+    Command cmd;
+    cmd.type = CommandType::APPLY_CONFIG;
+    cmd.source = "ble";
+    cmd.payload = "";
+
+    if (!svc_.cmdQueue_.enqueue(cmd))
+    {
+        svc_.pNotify_->setValue("error: queue full");
+        svc_.pNotify_->notify();
+        return;
+    }
+
     svc_.pNotify_->setValue("OK");
     svc_.pNotify_->notify();
-
-    const String clientId = "ESP32DoorLock-" + svc_.appState_.macAddress;
-    NetworkManager::begin(newCfg, clientId);
-    svc_.mqttSvc_.attachCallback();
 }
 
 void

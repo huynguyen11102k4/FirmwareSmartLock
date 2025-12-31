@@ -1,9 +1,9 @@
-#include "JsonUtils.h"
+#include "utils/JsonUtils.h"
 
 bool
 JsonUtils::deserialize(const String& json, JsonDocument& doc)
 {
-    DeserializationError err = deserializeJson(doc, json);
+    const DeserializationError err = deserializeJson(doc, json);
     return !err;
 }
 

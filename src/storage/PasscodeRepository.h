@@ -1,4 +1,5 @@
 #pragma once
+#include "config/AppPaths.h"
 #include "models/PasscodeTemp.h"
 
 #include <Arduino.h>
@@ -11,22 +12,26 @@ class PasscodeRepository
 
     String
     getMaster() const;
+
     bool
     setMaster(const String& pass);
 
     bool
     hasTemp() const;
+
     PasscodeTemp
     getTemp() const;
+
     bool
     setTemp(const PasscodeTemp& temp);
+
     bool
     clearTemp();
 
   private:
-    String _master;
-    PasscodeTemp _temp;
-    bool _hasTemp = false;
+    String master_;
+    PasscodeTemp temp_;
+    bool hasTemp_{false};
 
-    static constexpr const char* PATH = "/passcode.json";
+    static constexpr const char* PATH = AppPaths::PASSCODES_JSON;
 };

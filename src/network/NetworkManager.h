@@ -6,11 +6,12 @@ class NetworkManager
   public:
     static void
     begin(const AppConfig& cfg, const String& clientId);
+
     static void
     loop();
 
     static bool
-    online(); // wifi + mqtt
+    online();
 
   private:
     static bool otaStarted;

@@ -7,13 +7,13 @@
 #include "app/services/PublishService.h"
 #include "app/services/RfidService.h"
 #include "config/AppConfig.h"
-#include "config/AppPaths.h"
 #include "config/ConfigManager.h"
 #include "config/HardwarePins.h"
 #include "config/LockConfig.h"
 #include "config/TimeConfig.h"
 #include "hardware/DoorHardware.h"
 #include "models/AppState.h"
+#include "models/Command.h"
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
 #include "network/NetworkManager.h"
@@ -36,19 +36,17 @@ class AppImpl
 {
   public:
     AppImpl()
-        : publish_(appState_, passRepo_, iccardsCache_), ctx_{appState_, publish_},
+        : publish_(appState_, passRepo_, cardRepo_), ctx_{appState_, publish_, lockConfig_},
           door_(
               lockServo_, LED_PIN, SERVO_PIN, DOOR_CONTACT_PIN,
-              /*contactActiveLow=*/false, /*debounceMs=*/80, /*usePullup=*/true
+              /*contactActiveLow=*/false,
+              /*debounceMs=*/80,
+              /*usePullup=*/true
           ),
-          mqtt_(
-              appState_, passRepo_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
-              &AppImpl::batteryThunk_, door_
-          ),
-          ble_(appState_, cfgMgr_, mqtt_), http_(appState_, this, &AppImpl::batteryThunk_),
-          keypad_(appState_, passRepo_, publish_, door_),
-          rfid_(appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_, door_),
-          cmdQueue_(20)
+          cmdQueue_(20), mqtt_(appState_, passRepo_, cardRepo_, publish_, lockConfig_, door_),
+          ble_(appState_, cfgMgr_, cmdQueue_), http_(appState_, this, &AppImpl::batteryThunk_),
+          keypad_(appState_, passRepo_, publish_, door_, lockConfig_),
+          rfid_(appState_, cardRepo_, publish_, door_, lockConfig_)
     {
     }
 
@@ -57,22 +55,20 @@ class AppImpl
     {
         Logger::begin(115200);
         Logger::info("APP", "Smart Lock Starting...");
-        Logger::info("APP", "Version: 2.0 (Improved)");
+        Logger::info("APP", "Version: 3.0 (Refactor + Policy Wiring)");
 
-        // ✅ Start watchdog (30s timeout)
         WatchdogManager::begin(30);
         Logger::info("APP", "Watchdog enabled (30s)");
 
         FileSystem::begin();
 
-        // ✅ Load lock configuration
         if (lockConfig_.loadFromFile())
         {
-            Logger::info("APP", "Lock config loaded from file");
+            Logger::info("APP", "Lock config loaded");
         }
         else
         {
-            Logger::info("APP", "Using default lock config");
+            Logger::warn("APP", "Lock config missing, saving defaults");
             lockConfig_.saveToFile();
         }
 
@@ -85,7 +81,6 @@ class AppImpl
 
         passRepo_.load();
         cardRepo_.load();
-        syncIccardsCacheFromRepositoryFile_();
 
         const bool hasConfig = cfgMgr_.load();
         setBaseTopicFromConfigOrDefault_();
@@ -98,11 +93,14 @@ class AppImpl
 
         if (!hasConfig || !cfgMgr_.isProvisioned())
         {
+            Logger::warn("APP", "Not provisioned -> BLE mode");
             ble_.begin();
         }
         else
         {
+            Logger::info("APP", "Provisioned -> Network mode");
             ble_.disableIfActive();
+
             const String clientId = "ESP32DoorLock-" + appState_.macAddress;
             NetworkManager::begin(cfgMgr_.get(), clientId);
             mqtt_.attachCallback();
@@ -115,10 +113,8 @@ class AppImpl
     void
     loop()
     {
-        // ✅ Feed watchdog at start of loop
         WatchdogManager::feed();
 
-        // Process command queue (thread-safe operations)
         processCommandQueue_();
 
         NetworkManager::loop();
@@ -129,43 +125,35 @@ class AppImpl
         if (isConnected && !wasConnected_)
         {
             ble_.disableIfActive();
-            mqtt_.onConnected(/*infoVersion=*/2); // Increment version
+            mqtt_.onConnected(/*infoVersion=*/3);
         }
         wasConnected_ = isConnected;
 
         http_.loop();
 
-        // Battery publish with configurable interval
         if (shouldPublishBattery_())
         {
             publish_.publishBattery(readBatteryPercent_());
             lastBatteryPublishMs_ = millis();
         }
 
-        // Sync with configurable interval
         if (shouldSync_())
         {
             publish_.publishPasscodeList();
+            publish_.publishICCardList();
             lastSyncMs_ = millis();
         }
 
         keypad_.loop();
         rfid_.loop();
-        serviceTempPasscodeExpiry_();
 
-        // Monitor system health
+        serviceTempPasscodeExpiry_();
         monitorSystemHealth_();
 
         yield();
     }
 
   private:
-    static void
-    syncThunk_(void* ctx)
-    {
-        static_cast<AppImpl*>(ctx)->syncIccardsCacheFromRepositoryFile_();
-    }
-
     static int
     batteryThunk_(void* ctx)
     {
@@ -175,42 +163,24 @@ class AppImpl
     int
     readBatteryPercent_()
     {
-        int raw = analogRead(BATTERY_PIN);
-        float v = (raw / 4095.0f) * 3.3f * 2.0f;
+        const int raw = analogRead(BATTERY_PIN);
+        const float v = (raw / 4095.0f) * 3.3f * 2.0f;
 
-        // ✅ Use configurable voltage range
-        float percent = (v - lockConfig_.batteryMinVoltage) /
-            (lockConfig_.batteryMaxVoltage - lockConfig_.batteryMinVoltage) * 100.0f;
+        const float minV = lockConfig_.batteryMinVoltage;
+        const float maxV = lockConfig_.batteryMaxVoltage;
 
-        if (percent < 0)
-            percent = 0;
-        if (percent > 100)
-            percent = 100;
+        float percent = 0.0f;
+        if (maxV > minV)
+        {
+            percent = (v - minV) / (maxV - minV) * 100.0f;
+        }
+
+        if (percent < 0.0f)
+            percent = 0.0f;
+        if (percent > 100.0f)
+            percent = 100.0f;
 
         return (int)percent;
-    }
-
-    void
-    syncIccardsCacheFromRepositoryFile_()
-    {
-        iccardsCache_.clear();
-
-        if (!FileSystem::exists(AppPaths::CARDS_JSON))
-            return;
-
-        const String json = FileSystem::readFile(AppPaths::CARDS_JSON);
-        auto& doc = JsonPool::acquireLarge();
-
-        if (!JsonUtils::deserialize(json, doc))
-            return;
-
-        if (doc.containsKey(AppJsonKeys::CARDS) && doc[AppJsonKeys::CARDS].is<JsonArray>())
-        {
-            for (JsonVariant v : doc[AppJsonKeys::CARDS].as<JsonArray>())
-            {
-                iccardsCache_.push_back(v.as<String>());
-            }
-        }
     }
 
     void
@@ -237,13 +207,13 @@ class AppImpl
     bool
     shouldPublishBattery_() const
     {
-        return (millis() - lastBatteryPublishMs_) >= lockConfig_.batteryPublishIntervalMs;
+        return (uint32_t)(millis() - lastBatteryPublishMs_) >= lockConfig_.batteryPublishIntervalMs;
     }
 
     bool
     shouldSync_() const
     {
-        return (millis() - lastSyncMs_) >= lockConfig_.syncIntervalMs;
+        return (uint32_t)(millis() - lastSyncMs_) >= lockConfig_.syncIntervalMs;
     }
 
     void
@@ -252,9 +222,25 @@ class AppImpl
         Command cmd;
         while (cmdQueue_.dequeue(cmd))
         {
-            Logger::info("APP", "Processing command type: %d", (int)cmd.type);
-            // Process command based on type
-            // This provides thread-safe command handling
+            Logger::info("APP", "Command: type=%d src=%s", (int)cmd.type, cmd.source.c_str());
+
+            if (cmd.type == CommandType::APPLY_CONFIG)
+            {
+                const bool ok = cfgMgr_.load() && cfgMgr_.isProvisioned();
+                setBaseTopicFromConfigOrDefault_();
+
+                if (!ok)
+                {
+                    Logger::error("APP", "APPLY_CONFIG failed: invalid config");
+                    continue;
+                }
+
+                const String clientId = "ESP32DoorLock-" + appState_.macAddress;
+                NetworkManager::begin(cfgMgr_.get(), clientId);
+                mqtt_.attachCallback();
+
+                Logger::info("APP", "APPLY_CONFIG ok -> Network begin");
+            }
         }
     }
 
@@ -262,29 +248,27 @@ class AppImpl
     monitorSystemHealth_()
     {
         static uint32_t lastHealthCheck = 0;
-        if (millis() - lastHealthCheck < 10000) // Every 10s
+        if ((uint32_t)(millis() - lastHealthCheck) < 10000)
             return;
 
         lastHealthCheck = millis();
 
-        // Check heap
-        size_t freeHeap = ESP.getFreeHeap();
-        if (freeHeap < 20000) // Less than 20KB free
+        const size_t freeHeap = ESP.getFreeHeap();
+        if (freeHeap < 20000)
         {
-            Logger::warn("APP", "Low heap: %d bytes", freeHeap);
+            Logger::warn("APP", "Low heap: %d bytes", (int)freeHeap);
         }
 
-        // Check watchdog time
-        uint32_t timeSinceFeed = WatchdogManager::timeSinceLastFeed();
-        if (timeSinceFeed > 20000) // Over 20s without feed
+        const uint32_t timeSinceFeed = WatchdogManager::timeSinceLastFeed();
+        if (timeSinceFeed > 20000)
         {
-            Logger::warn("APP", "Watchdog feed delayed: %dms", timeSinceFeed);
+            Logger::warn("APP", "Watchdog feed delayed: %dms", (int)timeSinceFeed);
         }
 
-        // Check MQTT retry count
-        if (MqttManager::getRetryAttempts() > 10)
+        const int retry = MqttManager::getRetryAttempts();
+        if (retry > 10)
         {
-            Logger::warn("APP", "MQTT retry count high: %d", MqttManager::getRetryAttempts());
+            Logger::warn("APP", "MQTT retry high: %d", retry);
         }
     }
 
@@ -297,12 +281,13 @@ class AppImpl
     LockConfig lockConfig_;
 
     AppState appState_;
-    std::vector<String> iccardsCache_;
 
     PublishService publish_;
     AppContext ctx_;
 
     DoorHardware door_;
+
+    CommandQueue cmdQueue_;
 
     MqttService mqtt_;
     BleProvisionService ble_;
@@ -310,14 +295,11 @@ class AppImpl
     KeypadService keypad_;
     RfidService rfid_;
 
-    CommandQueue cmdQueue_;
-
     bool wasConnected_{false};
     uint32_t lastBatteryPublishMs_{0};
     uint32_t lastSyncMs_{0};
 };
 
-// Wrapper
 static AppImpl g_app;
 
 App::App() = default;

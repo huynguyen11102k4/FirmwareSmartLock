@@ -28,7 +28,6 @@ class HealthMonitor
         health.uptime = millis() / 1000;
         health.cpuFreqMHz = ESP.getCpuFreqMHz();
 
-// Temperature (if available)
 #ifdef SOC_TEMP_SENSOR_SUPPORTED
         health.cpuTemp = temperatureRead();
 #else
@@ -41,67 +40,35 @@ class HealthMonitor
     static void
     logHealth()
     {
-        SystemHealth h = getHealth();
-
+        const SystemHealth h = getHealth();
         Logger::info(
-            "HEALTH", "Heap: %d/%d (min: %d), Uptime: %ds, CPU: %.0fMHz", h.freeHeap, h.heapSize,
-            h.minFreeHeap, h.uptime, h.cpuFreqMHz
+            "HEALTH", "Heap: %d/%d (min: %d), Uptime: %ds, CPU: %.0fMHz", (int)h.freeHeap,
+            (int)h.heapSize, (int)h.minFreeHeap, (int)h.uptime, h.cpuFreqMHz
         );
 
         if (h.cpuTemp > 0)
         {
-            Logger::info("HEALTH", "CPU Temp: %d°C", h.cpuTemp);
+            Logger::info("HEALTH", "CPU Temp: %dC", (int)h.cpuTemp);
         }
     }
 
     static bool
     isHealthy()
     {
-        SystemHealth h = getHealth();
+        const SystemHealth h = getHealth();
 
-        // Check heap
-        if (h.freeHeap < 15000) // Less than 15KB
+        if (h.freeHeap < 15000)
         {
-            Logger::warn("HEALTH", "Low heap: %d bytes", h.freeHeap);
+            Logger::warn("HEALTH", "Low heap: %d bytes", (int)h.freeHeap);
             return false;
         }
 
-        // Check temperature (if available)
-        if (h.cpuTemp > 80) // Over 80°C
+        if (h.cpuTemp > 80)
         {
-            Logger::warn("HEALTH", "High temperature: %d°C", h.cpuTemp);
+            Logger::warn("HEALTH", "High temperature: %dC", (int)h.cpuTemp);
             return false;
         }
 
         return true;
-    }
-
-    static String
-    getHealthJson()
-    {
-        SystemHealth h = getHealth();
-
-        String json = "{";
-        json += "\"freeHeap\":" + String(h.freeHeap) + ",";
-        json += "\"minFreeHeap\":" + String(h.minFreeHeap) + ",";
-        json += "\"heapSize\":" + String(h.heapSize) + ",";
-        json += "\"uptime\":" + String(h.uptime) + ",";
-        json += "\"cpuFreqMHz\":" + String(h.cpuFreqMHz) + ",";
-        json += "\"cpuTemp\":" + String(h.cpuTemp);
-        json += "}";
-
-        return json;
-    }
-
-    static void
-    performGarbageCollection()
-    {
-        // Force heap cleanup if needed
-        if (ESP.getFreeHeap() < 20000)
-        {
-            Logger::info("HEALTH", "Performing garbage collection...");
-            // Can add custom cleanup here
-            yield();
-        }
     }
 };

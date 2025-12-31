@@ -27,28 +27,9 @@ struct DeviceState
     toJson(JsonObject obj) const
     {
         obj["door"] = (door == DoorState::LOCKED) ? MqttDoorState::LOCKED : MqttDoorState::UNLOCKED;
-
         obj["wifi"] = networkStateToString(wifi);
         obj["mqtt"] = networkStateToString(mqtt);
         obj["ble"] = bleConnected;
-    }
-
-    bool
-    isWifiConnected() const
-    {
-        return wifi == NetworkState::CONNECTED;
-    }
-
-    bool
-    isMqttConnected() const
-    {
-        return mqtt == NetworkState::CONNECTED;
-    }
-
-    bool
-    isFullyOnline() const
-    {
-        return isWifiConnected() && isMqttConnected();
     }
 
     void

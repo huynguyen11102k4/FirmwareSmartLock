@@ -6,6 +6,7 @@ class TimeUtils
   public:
     static uint32_t
     nowMillis();
+
     static uint64_t
     nowSeconds();
 

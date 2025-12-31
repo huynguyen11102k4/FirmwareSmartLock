@@ -1,8 +1,8 @@
-#include "Logger.h"
+#include "utils/Logger.h"
 
 #include <stdarg.h>
 
-LogLevel Logger::_level = LogLevel::INFO;
+LogLevel Logger::level_ = LogLevel::INFO;
 
 void
 Logger::begin(uint32_t baud)
@@ -13,26 +13,24 @@ Logger::begin(uint32_t baud)
 void
 Logger::setLevel(LogLevel level)
 {
-    _level = level;
+    level_ = level;
 }
 
 void
 Logger::log(LogLevel level, const char* tag, const char* fmt, va_list args)
 {
-    if (level > _level)
+    if (level > level_)
         return;
 
     char buffer[256];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
 
-    Serial.printf(
-        "[%s][%s] %s\n",
-        level == LogLevel::ERROR      ? "E"
-            : level == LogLevel::WARN ? "W"
-            : level == LogLevel::INFO ? "I"
-                                      : "D",
-        tag, buffer
-    );
+    const char* lvl = (level == LogLevel::ERROR) ? "E"
+        : (level == LogLevel::WARN)              ? "W"
+        : (level == LogLevel::INFO)              ? "I"
+                                                 : "D";
+
+    Serial.printf("[%s][%s] %s\n", lvl, tag, buffer);
 }
 
 #define LOG_IMPL(fn, lvl)                                                                          \

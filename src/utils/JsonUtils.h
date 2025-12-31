@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 #include <ArduinoJson.h>
 
 class JsonUtils
@@ -6,6 +7,7 @@ class JsonUtils
   public:
     static bool
     deserialize(const String& json, JsonDocument& doc);
+
     static String
     serialize(const JsonDocument& doc);
 

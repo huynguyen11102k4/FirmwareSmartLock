@@ -7,11 +7,11 @@
 #include <SPI.h>
 
 RfidService::RfidService(
-    AppState& appState, CardRepository& cardRepo, std::vector<String>& iccardsCache,
-    PublishService& publish, void* ctx, SyncFn syncCache, DoorHardware& door
+    AppState& appState, CardRepository& cardRepo, PublishService& publish, DoorHardware& door,
+    const LockConfig& lockConfig
 )
-    : appState_(appState), cardRepo_(cardRepo), iccardsCache_(iccardsCache), publish_(publish),
-      ctx_(ctx), syncCache_(syncCache), door_(door), mfrc522_(SS_PIN, RST_PIN)
+    : appState_(appState), cardRepo_(cardRepo), publish_(publish), door_(door),
+      lockConfig_(lockConfig), mfrc522_(SS_PIN, RST_PIN)
 {
 }
 
@@ -42,25 +42,21 @@ RfidService::getUID_()
 bool
 RfidService::detectCollision_()
 {
-    // ✅ Check for card collision
     byte bufferATQA[2];
     byte bufferSize = sizeof(bufferATQA);
 
-    MFRC522::StatusCode status = mfrc522_.PICC_RequestA(bufferATQA, &bufferSize);
-
+    const MFRC522::StatusCode status = mfrc522_.PICC_RequestA(bufferATQA, &bufferSize);
     if (status == MFRC522::STATUS_COLLISION)
     {
         publish_.publishLog("rfid_collision", "warning", "Multiple cards detected");
         return true;
     }
-
     return false;
 }
 
 void
 RfidService::loop()
 {
-    // ✅ Check for swipe add timeout
     if (appState_.runtimeFlags.swipeAddMode && appState_.swipeAdd.isTimeout())
     {
         appState_.runtimeFlags.swipeAddMode = false;
@@ -68,15 +64,13 @@ RfidService::loop()
         MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout");
     }
 
-    // ✅ Debounce RFID reads
-    static uint32_t lastReadMs = 0;
-    if (millis() - lastReadMs < 2000) // 2s debounce
+    const uint32_t debounceMs = lockConfig_.rfidDebounceMs;
+    if ((uint32_t)(millis() - lastReadMs_) < debounceMs)
         return;
 
     if (!mfrc522_.PICC_IsNewCardPresent())
         return;
 
-    // ✅ Check for collision before reading
     if (detectCollision_())
     {
         delay(100);
@@ -86,14 +80,14 @@ RfidService::loop()
     if (!mfrc522_.PICC_ReadCardSerial())
         return;
 
-    lastReadMs = millis();
+    lastReadMs_ = millis();
     const String uid = getUID_();
 
     if (appState_.runtimeFlags.swipeAddMode)
     {
         if (!appState_.swipeAdd.hasFirstSwipe())
         {
-            appState_.swipeAdd.recordFirstSwipe(uid);
+            appState_.swipeAdd.recordFirstSwipe(uid, lockConfig_.swipeAddTimeoutMs);
             MqttManager::publish(
                 Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_first_detected"
             );
@@ -102,8 +96,6 @@ RfidService::loop()
         {
             if (cardRepo_.add(uid))
             {
-                if (syncCache_)
-                    syncCache_(ctx_);
                 publish_.publishICCardList();
             }
 
@@ -128,12 +120,10 @@ RfidService::loop()
     {
         door_.requestUnlock("card");
     }
-    else if (iccardsCache_.empty())
+    else if (cardRepo_.isEmpty())
     {
         if (cardRepo_.add(uid))
         {
-            if (syncCache_)
-                syncCache_(ctx_);
             publish_.publishICCardList();
         }
     }

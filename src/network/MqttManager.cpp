@@ -1,22 +1,22 @@
-#include "MqttManager.h"
+#include "network/MqttManager.h"
 
+#include "ca_cert.h"
 #include "network/RetryPolicy.h"
 #include "utils/Logger.h"
-
-#include <ca_cert.h>
 
 static WiFiClientSecure secureClient;
 static PubSubClient mqtt(secureClient);
 
-static const AppConfig* config = nullptr;
+static AppConfig config;
 static String clientId;
-static RetryPolicy retryPolicy(1000, 60000); // 1s base, 60s max
+
+static RetryPolicy retryPolicy(1000, 60000);
 static bool initialized = false;
 
 void
 MqttManager::begin(const AppConfig& cfg, const String& cid)
 {
-    config = &cfg;
+    config = cfg;
     clientId = cid;
 
     setupClient();
@@ -31,7 +31,7 @@ MqttManager::setupClient()
     secureClient.setTimeout(20);
     secureClient.setHandshakeTimeout(30);
 
-    mqtt.setServer(config->mqttHost.c_str(), config->mqttPort);
+    mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt.setKeepAlive(60);
     mqtt.setSocketTimeout(20);
     mqtt.setBufferSize(4096);
@@ -58,27 +58,26 @@ MqttManager::reconnect()
         return;
     }
 
-    // Check if we should retry based on exponential backoff
+    if (!config.hasMqtt())
+        return;
+
     if (!retryPolicy.shouldRetry())
         return;
 
     Logger::info(
-        "MQTT", "Connecting to %s:%d (attempt %d, delay %dms)", config->mqttHost.c_str(),
-        config->mqttPort, retryPolicy.getAttemptCount() + 1, retryPolicy.getCurrentDelay()
+        "MQTT", "Connecting to %s:%d (attempt %d, delay %dms)", config.mqttHost.c_str(),
+        config.mqttPort, retryPolicy.getAttemptCount() + 1, (int)retryPolicy.getCurrentDelay()
     );
 
     retryPolicy.recordAttempt();
 
-    if (!mqtt.connect(clientId.c_str(), config->mqttUser.c_str(), config->mqttPass.c_str()))
+    if (!mqtt.connect(clientId.c_str(), config.mqttUser.c_str(), config.mqttPass.c_str()))
     {
         Logger::error("MQTT", "Connect failed rc=%d", mqtt.state());
 
-        // Log backoff info
         if (retryPolicy.getAttemptCount() >= 5)
         {
-            Logger::warn(
-                "MQTT", "Multiple failures, next retry in %ds", retryPolicy.getCurrentDelay() / 1000
-            );
+            Logger::warn("MQTT", "Next retry in %ds", (int)(retryPolicy.getCurrentDelay() / 1000));
         }
         return;
     }
@@ -102,13 +101,11 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
     if (!mqtt.connected())
         return false;
 
-    bool success = mqtt.publish(topic.c_str(), payload.c_str(), retained);
-
+    const bool success = mqtt.publish(topic.c_str(), payload.c_str(), retained);
     if (!success)
     {
         Logger::error("MQTT", "Publish failed to topic: %s", topic.c_str());
     }
-
     return success;
 }
 
@@ -118,11 +115,10 @@ MqttManager::subscribe(const String& topic, int qos)
     if (!mqtt.connected())
         return;
 
-    bool success = mqtt.subscribe(topic.c_str(), qos);
-
+    const bool success = mqtt.subscribe(topic.c_str(), qos);
     if (success)
     {
-        Logger::info("MQTT", "Subscribed to: %s", topic.c_str());
+        Logger::info("MQTT", "Subscribed: %s", topic.c_str());
     }
     else
     {

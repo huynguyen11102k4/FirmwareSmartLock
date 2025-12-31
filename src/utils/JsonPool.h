@@ -1,76 +1,34 @@
 #pragma once
 #include <ArduinoJson.h>
 
-// Pre-allocated JSON buffers to prevent heap fragmentation
 class JsonPool
 {
   public:
     enum class Size
     {
-        SMALL = 256,  // Simple messages
-        MEDIUM = 512, // Config, commands
-        LARGE = 1024, // Card lists
-        XLARGE = 2048 // Full state dumps
+        SMALL = 256,
+        MEDIUM = 512,
+        LARGE = 1024,
+        XLARGE = 2048
     };
 
-    // Get a buffer of specified size
     static DynamicJsonDocument&
-    acquire(Size size)
-    {
-        switch (size)
-        {
-            case Size::SMALL:
-                small_.clear();
-                return small_;
-            case Size::MEDIUM:
-                medium_.clear();
-                return medium_;
-            case Size::LARGE:
-                large_.clear();
-                return large_;
-            case Size::XLARGE:
-                xlarge_.clear();
-                return xlarge_;
-            default:
-                medium_.clear();
-                return medium_;
-        }
-    }
-
-    // Convenience methods
-    static DynamicJsonDocument&
-    acquireSmall()
-    {
-        return acquire(Size::SMALL);
-    }
+    acquire(Size size);
 
     static DynamicJsonDocument&
-    acquireMedium()
-    {
-        return acquire(Size::MEDIUM);
-    }
+    acquireSmall();
 
     static DynamicJsonDocument&
-    acquireLarge()
-    {
-        return acquire(Size::LARGE);
-    }
+    acquireMedium();
 
     static DynamicJsonDocument&
-    acquireXLarge()
-    {
-        return acquire(Size::XLARGE);
-    }
+    acquireLarge();
 
-    // Release (explicit clear)
+    static DynamicJsonDocument&
+    acquireXLarge();
+
     static void
-    releaseAll()
-    {
-        small_.clear();
-        medium_.clear();
-        large_.clear();
-        xlarge_.clear();
-    }
+    releaseAll();
 
   private:
     static DynamicJsonDocument small_;
@@ -78,8 +36,3 @@ class JsonPool
     static DynamicJsonDocument large_;
     static DynamicJsonDocument xlarge_;
 };
-
-DynamicJsonDocument JsonPool::small_(256);
-DynamicJsonDocument JsonPool::medium_(512);
-DynamicJsonDocument JsonPool::large_(1024);
-DynamicJsonDocument JsonPool::xlarge_(2048);

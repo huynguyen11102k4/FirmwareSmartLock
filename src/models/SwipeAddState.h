@@ -3,27 +3,30 @@
 
 struct SwipeAddState
 {
-    String firstSwipeUid = ""; // UID của lần quẹt đầu tiên
-    uint32_t timeoutMs = 0;    // Thời điểm timeout (millis)
+    String firstSwipeUid = "";
+    uint32_t timeoutMs = 0;
 
     void
-    start(uint32_t timeoutDuration = 60000)
+    start(uint32_t timeoutDurationMs)
     {
         firstSwipeUid = "";
-        timeoutMs = millis() + timeoutDuration;
+        timeoutMs = millis() + timeoutDurationMs;
     }
 
     void
-    recordFirstSwipe(const String& uid)
+    recordFirstSwipe(const String& uid, uint32_t timeoutDurationMs)
     {
         firstSwipeUid = uid;
-        timeoutMs = millis() + 60000; // Reset timeout
+        timeoutMs = millis() + timeoutDurationMs;
     }
 
     bool
     isTimeout() const
     {
-        return millis() > timeoutMs;
+        if (timeoutMs == 0)
+            return false;
+
+        return (int32_t)(millis() - timeoutMs) >= 0;
     }
 
     bool
@@ -48,8 +51,13 @@ struct SwipeAddState
     uint32_t
     remainingSeconds() const
     {
-        if (isTimeout())
+        if (timeoutMs == 0)
             return 0;
-        return (timeoutMs - millis()) / 1000;
+
+        const int32_t msLeft = (int32_t)(timeoutMs - millis());
+        if (msLeft <= 0)
+            return 0;
+
+        return (uint32_t)(msLeft / 1000);
     }
 };

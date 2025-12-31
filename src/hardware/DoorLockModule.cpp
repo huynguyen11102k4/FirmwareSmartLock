@@ -1,5 +1,6 @@
 #include "hardware/DoorLockModule.h"
 
+#include "config/LockConfig.h"
 #include "models/DeviceState.h"
 #include "models/MqttContract.h"
 
@@ -33,7 +34,7 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
     digitalWrite(ledPin_, HIGH);
     servo_.write(UNLOCK_ANGLE);
 
-    ctx.app.doorLock.unlock();
+    ctx.app.doorLock.unlock(ctx.lock.unlockDurationMs);
     ctx.app.deviceState.setDoorState(DoorState::UNLOCKED);
 
     ctx.publish.publishState(MqttDoorState::UNLOCKED, method);
