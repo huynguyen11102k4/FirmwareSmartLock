@@ -28,6 +28,10 @@ class RfidService
     String
     getUID_();
 
+    // ✅ New: Detect card collision
+    bool
+    detectCollision_();
+
     AppState& appState_;
     CardRepository& cardRepo_;
     std::vector<String>& iccardsCache_;

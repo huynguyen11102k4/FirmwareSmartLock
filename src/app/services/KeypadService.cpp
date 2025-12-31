@@ -2,6 +2,7 @@
 
 #include "config/HardwarePins.h"
 #include "models/PasscodeTemp.h"
+#include "utils/SecureCompare.h"
 #include "utils/TimeUtils.h"
 
 #include <Arduino.h>
@@ -36,9 +37,11 @@ bool
 KeypadService::checkPIN_(const String& pin)
 {
     const String master = passRepo_.getMaster();
-    if (master.length() >= 4 && pin == master)
+
+    // ✅ Use constant-time comparison to prevent timing attacks
+    if (master.length() >= 4 && SecureCompare::safeEquals(pin, master))
     {
-        publish_.publishLog("unlock", "master_pin", pin);
+        publish_.publishLog("unlock", "master_pin", "****");
         return true;
     }
 
@@ -53,16 +56,19 @@ KeypadService::checkPIN_(const String& pin)
             return false;
         }
 
-        if (pin == t.code)
+        // ✅ Use constant-time comparison
+        if (SecureCompare::safeEquals(pin, t.code))
         {
-            publish_.publishLog("unlock", "temp_pin", pin);
+            publish_.publishLog("unlock", "temp_pin", "****");
             passRepo_.clearTemp();
             publish_.publishPasscodeList();
             return true;
         }
     }
 
-    publish_.publishLog("wrong_pin", "pin", pin);
+    // ✅ Log masked PIN (first 2 digits only for debugging)
+    String maskedPin = pin.substring(0, min(2, (int)pin.length())) + "****";
+    publish_.publishLog("wrong_pin", "pin", maskedPin);
     return false;
 }
 

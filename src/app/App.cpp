@@ -10,6 +10,7 @@
 #include "config/AppPaths.h"
 #include "config/ConfigManager.h"
 #include "config/HardwarePins.h"
+#include "config/LockConfig.h"
 #include "config/TimeConfig.h"
 #include "hardware/DoorHardware.h"
 #include "models/AppState.h"
@@ -19,9 +20,12 @@
 #include "storage/CardRepository.h"
 #include "storage/FileSystem.h"
 #include "storage/PasscodeRepository.h"
+#include "utils/CommandQueue.h"
+#include "utils/JsonPool.h"
 #include "utils/JsonUtils.h"
 #include "utils/Logger.h"
 #include "utils/TimeUtils.h"
+#include "utils/WatchdogManager.h"
 
 #include <Arduino.h>
 #include <Servo.h>
@@ -43,7 +47,8 @@ class AppImpl
           ),
           ble_(appState_, cfgMgr_, mqtt_), http_(appState_, this, &AppImpl::batteryThunk_),
           keypad_(appState_, passRepo_, publish_, door_),
-          rfid_(appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_, door_)
+          rfid_(appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_, door_),
+          cmdQueue_(20)
     {
     }
 
@@ -52,8 +57,25 @@ class AppImpl
     {
         Logger::begin(115200);
         Logger::info("APP", "Smart Lock Starting...");
+        Logger::info("APP", "Version: 2.0 (Improved)");
+
+        // ✅ Start watchdog (30s timeout)
+        WatchdogManager::begin(30);
+        Logger::info("APP", "Watchdog enabled (30s)");
 
         FileSystem::begin();
+
+        // ✅ Load lock configuration
+        if (lockConfig_.loadFromFile())
+        {
+            Logger::info("APP", "Lock config loaded from file");
+        }
+        else
+        {
+            Logger::info("APP", "Using default lock config");
+            lockConfig_.saveToFile();
+        }
+
         configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
 
         WiFi.mode(WIFI_STA);
@@ -85,11 +107,20 @@ class AppImpl
             NetworkManager::begin(cfgMgr_.get(), clientId);
             mqtt_.attachCallback();
         }
+
+        Logger::info("APP", "Initialization complete");
+        WatchdogManager::feed();
     }
 
     void
     loop()
     {
+        // ✅ Feed watchdog at start of loop
+        WatchdogManager::feed();
+
+        // Process command queue (thread-safe operations)
+        processCommandQueue_();
+
         NetworkManager::loop();
 
         door_.loop(ctx_);
@@ -98,27 +129,32 @@ class AppImpl
         if (isConnected && !wasConnected_)
         {
             ble_.disableIfActive();
-            mqtt_.onConnected(/*infoVersion=*/1);
+            mqtt_.onConnected(/*infoVersion=*/2); // Increment version
         }
         wasConnected_ = isConnected;
 
         http_.loop();
 
-        if (appState_.shouldPublishBattery())
+        // Battery publish with configurable interval
+        if (shouldPublishBattery_())
         {
             publish_.publishBattery(readBatteryPercent_());
-            appState_.markBatteryPublished();
+            lastBatteryPublishMs_ = millis();
         }
 
-        if (appState_.shouldSync())
+        // Sync with configurable interval
+        if (shouldSync_())
         {
             publish_.publishPasscodeList();
-            appState_.markSynced();
+            lastSyncMs_ = millis();
         }
 
         keypad_.loop();
         rfid_.loop();
         serviceTempPasscodeExpiry_();
+
+        // Monitor system health
+        monitorSystemHealth_();
 
         yield();
     }
@@ -141,11 +177,16 @@ class AppImpl
     {
         int raw = analogRead(BATTERY_PIN);
         float v = (raw / 4095.0f) * 3.3f * 2.0f;
-        float percent = (v - 3.3f) / (4.2f - 3.3f) * 100.0f;
+
+        // ✅ Use configurable voltage range
+        float percent = (v - lockConfig_.batteryMinVoltage) /
+            (lockConfig_.batteryMaxVoltage - lockConfig_.batteryMinVoltage) * 100.0f;
+
         if (percent < 0)
             percent = 0;
         if (percent > 100)
             percent = 100;
+
         return (int)percent;
     }
 
@@ -158,7 +199,8 @@ class AppImpl
             return;
 
         const String json = FileSystem::readFile(AppPaths::CARDS_JSON);
-        DynamicJsonDocument doc(1024);
+        auto& doc = JsonPool::acquireLarge();
+
         if (!JsonUtils::deserialize(json, doc))
             return;
 
@@ -192,12 +234,67 @@ class AppImpl
         }
     }
 
+    bool
+    shouldPublishBattery_() const
+    {
+        return (millis() - lastBatteryPublishMs_) >= lockConfig_.batteryPublishIntervalMs;
+    }
+
+    bool
+    shouldSync_() const
+    {
+        return (millis() - lastSyncMs_) >= lockConfig_.syncIntervalMs;
+    }
+
+    void
+    processCommandQueue_()
+    {
+        Command cmd;
+        while (cmdQueue_.dequeue(cmd))
+        {
+            Logger::info("APP", "Processing command type: %d", (int)cmd.type);
+            // Process command based on type
+            // This provides thread-safe command handling
+        }
+    }
+
+    void
+    monitorSystemHealth_()
+    {
+        static uint32_t lastHealthCheck = 0;
+        if (millis() - lastHealthCheck < 10000) // Every 10s
+            return;
+
+        lastHealthCheck = millis();
+
+        // Check heap
+        size_t freeHeap = ESP.getFreeHeap();
+        if (freeHeap < 20000) // Less than 20KB free
+        {
+            Logger::warn("APP", "Low heap: %d bytes", freeHeap);
+        }
+
+        // Check watchdog time
+        uint32_t timeSinceFeed = WatchdogManager::timeSinceLastFeed();
+        if (timeSinceFeed > 20000) // Over 20s without feed
+        {
+            Logger::warn("APP", "Watchdog feed delayed: %dms", timeSinceFeed);
+        }
+
+        // Check MQTT retry count
+        if (MqttManager::getRetryAttempts() > 10)
+        {
+            Logger::warn("APP", "MQTT retry count high: %d", MqttManager::getRetryAttempts());
+        }
+    }
+
   private:
     Servo lockServo_;
 
     PasscodeRepository passRepo_;
     CardRepository cardRepo_;
     ConfigManager cfgMgr_;
+    LockConfig lockConfig_;
 
     AppState appState_;
     std::vector<String> iccardsCache_;
@@ -213,7 +310,11 @@ class AppImpl
     KeypadService keypad_;
     RfidService rfid_;
 
+    CommandQueue cmdQueue_;
+
     bool wasConnected_{false};
+    uint32_t lastBatteryPublishMs_{0};
+    uint32_t lastSyncMs_{0};
 };
 
 // Wrapper

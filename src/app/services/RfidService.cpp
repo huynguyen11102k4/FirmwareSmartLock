@@ -39,9 +39,28 @@ RfidService::getUID_()
     return uid;
 }
 
+bool
+RfidService::detectCollision_()
+{
+    // ✅ Check for card collision
+    byte bufferATQA[2];
+    byte bufferSize = sizeof(bufferATQA);
+
+    MFRC522::StatusCode status = mfrc522_.PICC_RequestA(bufferATQA, &bufferSize);
+
+    if (status == MFRC522::STATUS_COLLISION)
+    {
+        publish_.publishLog("rfid_collision", "warning", "Multiple cards detected");
+        return true;
+    }
+
+    return false;
+}
+
 void
 RfidService::loop()
 {
+    // ✅ Check for swipe add timeout
     if (appState_.runtimeFlags.swipeAddMode && appState_.swipeAdd.isTimeout())
     {
         appState_.runtimeFlags.swipeAddMode = false;
@@ -49,9 +68,25 @@ RfidService::loop()
         MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout");
     }
 
-    if (!mfrc522_.PICC_IsNewCardPresent() || !mfrc522_.PICC_ReadCardSerial())
+    // ✅ Debounce RFID reads
+    static uint32_t lastReadMs = 0;
+    if (millis() - lastReadMs < 2000) // 2s debounce
         return;
 
+    if (!mfrc522_.PICC_IsNewCardPresent())
+        return;
+
+    // ✅ Check for collision before reading
+    if (detectCollision_())
+    {
+        delay(100);
+        return;
+    }
+
+    if (!mfrc522_.PICC_ReadCardSerial())
+        return;
+
+    lastReadMs = millis();
     const String uid = getUID_();
 
     if (appState_.runtimeFlags.swipeAddMode)
