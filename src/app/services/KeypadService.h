@@ -1,5 +1,6 @@
 #pragma once
 #include "app/services/PublishService.h"
+#include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "storage/PasscodeRepository.h"
 
@@ -9,15 +10,14 @@
 class KeypadService
 {
   public:
-    using RequestUnlockFn = void (*)(void* ctx, const String& method);
-
     KeypadService(
-        AppState& appState, PasscodeRepository& passRepo, PublishService& publish, void* ctx,
-        RequestUnlockFn requestUnlockFn
+        AppState& appState, PasscodeRepository& passRepo, PublishService& publish,
+        DoorHardware& door
     );
 
     void
     begin();
+
     void
     loop();
 
@@ -28,9 +28,7 @@ class KeypadService
     AppState& appState_;
     PasscodeRepository& passRepo_;
     PublishService& publish_;
-
-    void* ctx_{nullptr};
-    RequestUnlockFn onUnlock_{nullptr};
+    DoorHardware& door_;
 
     Keypad keypad_;
 };

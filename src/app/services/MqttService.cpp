@@ -4,7 +4,6 @@
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
 #include "utils/JsonUtils.h"
-#include "utils/TimeUtils.h"
 
 #include <ArduinoJson.h>
 
@@ -13,11 +12,11 @@ MqttService* MqttService::s_instance_ = nullptr;
 MqttService::MqttService(
     AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
     std::vector<String>& iccardsCache, PublishService& publish, void* ctx, SyncFn syncIccardsCache,
-    BatteryFn readBatteryPercent, UnlockFn onUnlock, LockFn onLock
+    BatteryFn readBatteryPercent, DoorHardware& door
 )
     : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo), iccardsCache_(iccardsCache),
       publish_(publish), ctx_(ctx), syncIccardsCache_(syncIccardsCache),
-      readBatteryPercent_(readBatteryPercent), onUnlock_(onUnlock), onLock_(onLock)
+      readBatteryPercent_(readBatteryPercent), door_(door)
 {
 }
 
@@ -217,12 +216,10 @@ MqttService::handleControlTopic_(const String& payloadStr)
     const String action = doc["action"] | "";
     if (action == "unlock")
     {
-        if (onUnlock_)
-            onUnlock_(ctx_, "remote");
+        door_.requestUnlock("remote");
     }
     else if (action == "lock")
     {
-        if (onLock_)
-            onLock_(ctx_, "remote");
+        door_.requestLock("remote");
     }
 }

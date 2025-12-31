@@ -1,17 +1,20 @@
 #pragma once
 
-// ======= RFID =======
+// RFID
 #define SS_PIN 5
 #define RST_PIN 22
+#define SCK_PIN 18
+#define MOSI_PIN 23
+#define MISO_PIN 19
 
-// ======= Actuators =======
+// Actuators
 #define SERVO_PIN 21
 #define LED_PIN 15
 
-// ======= Power =======
+// Power
 #define BATTERY_PIN 34
 
-// ======= Keypad =======
+// Keypad 4x4
 #define KEYPAD_ROW_1 27
 #define KEYPAD_ROW_2 26
 #define KEYPAD_ROW_3 25
@@ -21,3 +24,6 @@
 #define KEYPAD_COL_2 17
 #define KEYPAD_COL_3 16
 #define KEYPAD_COL_4 4
+
+// Door Contact (button / reed switch)
+#define DOOR_CONTACT_PIN 13

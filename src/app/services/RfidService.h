@@ -1,5 +1,6 @@
 #pragma once
 #include "app/services/PublishService.h"
+#include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "storage/CardRepository.h"
 
@@ -11,15 +12,15 @@ class RfidService
 {
   public:
     using SyncFn = void (*)(void* ctx);
-    using UnlockFn = void (*)(void* ctx, const String& method);
 
     RfidService(
         AppState& appState, CardRepository& cardRepo, std::vector<String>& iccardsCache,
-        PublishService& publish, void* ctx, SyncFn syncCache, UnlockFn onUnlock
+        PublishService& publish, void* ctx, SyncFn syncCache, DoorHardware& door
     );
 
     void
     begin();
+
     void
     loop();
 
@@ -34,7 +35,8 @@ class RfidService
 
     void* ctx_{nullptr};
     SyncFn syncCache_{nullptr};
-    UnlockFn onUnlock_{nullptr};
+
+    DoorHardware& door_;
 
     MFRC522 mfrc522_;
 };

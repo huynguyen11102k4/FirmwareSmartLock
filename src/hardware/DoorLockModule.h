@@ -17,7 +17,7 @@ class DoorLockModule final : public IHardwareModule
     lock(AppContext& ctx, const String& reason);
 
     void
-    onDoorContactChanged(bool open);
+    onDoorContactChanged(bool isOpen);
 
     void
     begin(AppContext& ctx) override;

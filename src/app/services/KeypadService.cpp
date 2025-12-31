@@ -17,13 +17,12 @@ static char KEYS[ROWS][COLS] = {
 
 static byte ROW_PINS[ROWS] = {KEYPAD_ROW_1, KEYPAD_ROW_2, KEYPAD_ROW_3, KEYPAD_ROW_4};
 static byte COL_PINS[COLS] = {KEYPAD_COL_1, KEYPAD_COL_2, KEYPAD_COL_3, KEYPAD_COL_4};
-}
+} // namespace
 
 KeypadService::KeypadService(
-    AppState& appState, PasscodeRepository& passRepo, PublishService& publish, void* ctx,
-    RequestUnlockFn requestUnlockFn
+    AppState& appState, PasscodeRepository& passRepo, PublishService& publish, DoorHardware& door
 )
-    : appState_(appState), passRepo_(passRepo), publish_(publish), ctx_(ctx), onUnlock_(requestUnlockFn),
+    : appState_(appState), passRepo_(passRepo), publish_(publish), door_(door),
       keypad_(makeKeymap(KEYS), ROW_PINS, COL_PINS, ROWS, COLS)
 {
 }
@@ -90,8 +89,7 @@ KeypadService::loop()
         if (checkPIN_(pin))
         {
             appState_.pinAuth.recordSuccess();
-            if (onUnlock_)
-                onUnlock_(ctx_, "pin");
+            door_.requestUnlock("pin");
         }
         else
         {

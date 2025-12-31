@@ -8,31 +8,33 @@
 
 RfidService::RfidService(
     AppState& appState, CardRepository& cardRepo, std::vector<String>& iccardsCache,
-    PublishService& publish, void* ctx, SyncFn syncCache, UnlockFn onUnlock
+    PublishService& publish, void* ctx, SyncFn syncCache, DoorHardware& door
 )
     : appState_(appState), cardRepo_(cardRepo), iccardsCache_(iccardsCache), publish_(publish),
-      ctx_(ctx), syncCache_(syncCache), onUnlock_(onUnlock), mfrc522_(SS_PIN, RST_PIN)
+      ctx_(ctx), syncCache_(syncCache), door_(door), mfrc522_(SS_PIN, RST_PIN)
 {
 }
 
 void
 RfidService::begin()
 {
-    SPI.begin();
+    SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
     mfrc522_.PCD_Init();
 }
 
 String
 RfidService::getUID_()
 {
-    String uid = "";
+    String uid;
+    uid.reserve(2 * mfrc522_.uid.size);
+
     for (byte i = 0; i < mfrc522_.uid.size; i++)
     {
         if (mfrc522_.uid.uidByte[i] < 0x10)
             uid += "0";
         uid += String(mfrc522_.uid.uidByte[i], HEX);
     }
-    uid.replace(":", "");
+
     uid.toUpperCase();
     return uid;
 }
@@ -89,8 +91,7 @@ RfidService::loop()
 
     if (cardRepo_.exists(uid))
     {
-        if (onUnlock_)
-            onUnlock_(ctx_, "card");
+        door_.requestUnlock("card");
     }
     else if (iccardsCache_.empty())
     {
@@ -103,5 +104,7 @@ RfidService::loop()
     }
 
     publish_.publishLog("card_scan", "card", uid);
+
     mfrc522_.PICC_HaltA();
+    mfrc522_.PCD_StopCrypto1();
 }

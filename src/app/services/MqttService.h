@@ -1,5 +1,6 @@
 #pragma once
 #include "app/services/PublishService.h"
+#include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "storage/CardRepository.h"
 #include "storage/PasscodeRepository.h"
@@ -11,24 +12,24 @@ class MqttService
 {
   public:
     using SyncFn = void (*)(void* ctx);
-    using UnlockFn = void (*)(void* ctx, const String& method);
-    using LockFn = void (*)(void* ctx, const String& reason);
     using BatteryFn = int (*)(void* ctx);
 
     MqttService(
         AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
         std::vector<String>& iccardsCache, PublishService& publish, void* ctx,
-        SyncFn syncIccardsCache, BatteryFn readBatteryPercent, UnlockFn onUnlock, LockFn onLock
+        SyncFn syncIccardsCache, BatteryFn readBatteryPercent, DoorHardware& door
     );
 
     void
     attachCallback();
+
     void
     onConnected(int infoVersion);
 
   private:
     static void
     callbackThunk(char* topic, byte* payload, unsigned int length);
+
     void
     dispatch_(const String& topicStr, const String& payloadStr);
 
@@ -48,8 +49,8 @@ class MqttService
     void* ctx_{nullptr};
     SyncFn syncIccardsCache_{nullptr};
     BatteryFn readBatteryPercent_{nullptr};
-    UnlockFn onUnlock_{nullptr};
-    LockFn onLock_{nullptr};
+
+    DoorHardware& door_;
 
     static MqttService* s_instance_;
 };

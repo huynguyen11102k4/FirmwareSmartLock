@@ -11,7 +11,7 @@
 #include "config/ConfigManager.h"
 #include "config/HardwarePins.h"
 #include "config/TimeConfig.h"
-#include "hardware/DoorLockModule.h"
+#include "hardware/DoorHardware.h"
 #include "models/AppState.h"
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
@@ -32,20 +32,18 @@ class AppImpl
 {
   public:
     AppImpl()
-        : publish_(appState_, passRepo_, iccardsCache_),
-          ctx_{appState_, publish_},
-          doorLock_(lockServo_, LED_PIN, SERVO_PIN),
+        : publish_(appState_, passRepo_, iccardsCache_), ctx_{appState_, publish_},
+          door_(
+              lockServo_, LED_PIN, SERVO_PIN, DOOR_CONTACT_PIN,
+              /*contactActiveLow=*/false, /*debounceMs=*/80, /*usePullup=*/true
+          ),
           mqtt_(
               appState_, passRepo_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
-              &AppImpl::batteryThunk_, &AppImpl::unlockThunk_, &AppImpl::lockThunk_
+              &AppImpl::batteryThunk_, door_
           ),
-          ble_(appState_, cfgMgr_, mqtt_),
-          http_(appState_, this, &AppImpl::batteryThunk_),
-          keypad_(appState_, passRepo_, publish_, this, &AppImpl::unlockThunk_),
-          rfid_(
-              appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
-              &AppImpl::unlockThunk_
-          )
+          ble_(appState_, cfgMgr_, mqtt_), http_(appState_, this, &AppImpl::batteryThunk_),
+          keypad_(appState_, passRepo_, publish_, door_),
+          rfid_(appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_, door_)
     {
     }
 
@@ -70,7 +68,7 @@ class AppImpl
         const bool hasConfig = cfgMgr_.load();
         setBaseTopicFromConfigOrDefault_();
 
-        doorLock_.begin(ctx_);
+        door_.begin(ctx_);
 
         rfid_.begin();
         keypad_.begin();
@@ -93,7 +91,8 @@ class AppImpl
     loop()
     {
         NetworkManager::loop();
-        doorLock_.loop(ctx_);
+
+        door_.loop(ctx_);
 
         const bool isConnected = MqttManager::connected();
         if (isConnected && !wasConnected_)
@@ -135,30 +134,6 @@ class AppImpl
     batteryThunk_(void* ctx)
     {
         return static_cast<AppImpl*>(ctx)->readBatteryPercent_();
-    }
-
-    static void
-    unlockThunk_(void* ctx, const String& method)
-    {
-        static_cast<AppImpl*>(ctx)->requestUnlock_(method);
-    }
-
-    static void
-    lockThunk_(void* ctx, const String& reason)
-    {
-        static_cast<AppImpl*>(ctx)->requestLock_(reason);
-    }
-
-    void
-    requestUnlock_(const String& method)
-    {
-        doorLock_.unlock(ctx_, method);
-    }
-
-    void
-    requestLock_(const String& reason)
-    {
-        doorLock_.lock(ctx_, reason);
     }
 
     int
@@ -229,7 +204,8 @@ class AppImpl
 
     PublishService publish_;
     AppContext ctx_;
-    DoorLockModule doorLock_;
+
+    DoorHardware door_;
 
     MqttService mqtt_;
     BleProvisionService ble_;
