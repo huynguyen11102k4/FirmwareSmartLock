@@ -1,4 +1,5 @@
 #pragma once
+
 #include "hardware/IHardwareModule.h"
 
 #include <Arduino.h>
@@ -11,6 +12,7 @@ class DoorLockModule final : public IHardwareModule
 
     void
     unlock(AppContext& ctx, const String& method);
+
     void
     lock(AppContext& ctx, const String& reason);
 
@@ -19,6 +21,7 @@ class DoorLockModule final : public IHardwareModule
 
     void
     begin(AppContext& ctx) override;
+
     void
     loop(AppContext& ctx) override;
 

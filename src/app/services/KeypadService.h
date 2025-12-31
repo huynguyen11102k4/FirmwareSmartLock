@@ -9,11 +9,11 @@
 class KeypadService
 {
   public:
-    using UnlockFn = void (*)(void* ctx, const String& method);
+    using RequestUnlockFn = void (*)(void* ctx, const String& method);
 
     KeypadService(
         AppState& appState, PasscodeRepository& passRepo, PublishService& publish, void* ctx,
-        UnlockFn onUnlock
+        RequestUnlockFn requestUnlockFn
     );
 
     void
@@ -30,7 +30,7 @@ class KeypadService
     PublishService& publish_;
 
     void* ctx_{nullptr};
-    UnlockFn onUnlock_{nullptr};
+    RequestUnlockFn onUnlock_{nullptr};
 
     Keypad keypad_;
 };

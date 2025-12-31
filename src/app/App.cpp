@@ -11,6 +11,7 @@
 #include "config/ConfigManager.h"
 #include "config/HardwarePins.h"
 #include "config/TimeConfig.h"
+#include "hardware/DoorLockModule.h"
 #include "models/AppState.h"
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
@@ -32,11 +33,14 @@ class AppImpl
   public:
     AppImpl()
         : publish_(appState_, passRepo_, iccardsCache_),
+          ctx_{appState_, publish_},
+          doorLock_(lockServo_, LED_PIN, SERVO_PIN),
           mqtt_(
               appState_, passRepo_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
               &AppImpl::batteryThunk_, &AppImpl::unlockThunk_, &AppImpl::lockThunk_
           ),
-          ble_(appState_, cfgMgr_, mqtt_), http_(appState_, this, &AppImpl::batteryThunk_),
+          ble_(appState_, cfgMgr_, mqtt_),
+          http_(appState_, this, &AppImpl::batteryThunk_),
           keypad_(appState_, passRepo_, publish_, this, &AppImpl::unlockThunk_),
           rfid_(
               appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
@@ -54,12 +58,6 @@ class AppImpl
         FileSystem::begin();
         configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
 
-        pinMode(LED_PIN, OUTPUT);
-        digitalWrite(LED_PIN, LOW);
-
-        lockServo_.attach(SERVO_PIN);
-        lockServo_.write(0);
-
         WiFi.mode(WIFI_STA);
         delay(100);
 
@@ -71,6 +69,8 @@ class AppImpl
 
         const bool hasConfig = cfgMgr_.load();
         setBaseTopicFromConfigOrDefault_();
+
+        doorLock_.begin(ctx_);
 
         rfid_.begin();
         keypad_.begin();
@@ -93,7 +93,7 @@ class AppImpl
     loop()
     {
         NetworkManager::loop();
-        serviceDoorAutoRelock_();
+        doorLock_.loop(ctx_);
 
         const bool isConnected = MqttManager::connected();
         if (isConnected && !wasConnected_)
@@ -140,13 +140,25 @@ class AppImpl
     static void
     unlockThunk_(void* ctx, const String& method)
     {
-        static_cast<AppImpl*>(ctx)->beginUnlock_(method);
+        static_cast<AppImpl*>(ctx)->requestUnlock_(method);
     }
 
     static void
     lockThunk_(void* ctx, const String& reason)
     {
-        static_cast<AppImpl*>(ctx)->forceLock_(reason);
+        static_cast<AppImpl*>(ctx)->requestLock_(reason);
+    }
+
+    void
+    requestUnlock_(const String& method)
+    {
+        doorLock_.unlock(ctx_, method);
+    }
+
+    void
+    requestLock_(const String& reason)
+    {
+        doorLock_.lock(ctx_, reason);
     }
 
     int
@@ -192,47 +204,6 @@ class AppImpl
     }
 
     void
-    beginUnlock_(const String& method)
-    {
-        digitalWrite(LED_PIN, HIGH);
-        lockServo_.write(90);
-
-        appState_.doorLock.unlock();
-        appState_.deviceState.setDoorState(DoorState::UNLOCKED);
-
-        publish_.publishState("unlocked", method);
-        publish_.publishLog("unlock", method);
-    }
-
-    void
-    forceLock_(const String& reason)
-    {
-        lockServo_.write(0);
-        digitalWrite(LED_PIN, LOW);
-
-        appState_.doorLock.lock();
-        appState_.deviceState.setDoorState(DoorState::LOCKED);
-
-        publish_.publishState("locked", reason);
-        publish_.publishLog("lock", reason);
-    }
-
-    void
-    serviceDoorAutoRelock_()
-    {
-        if (!appState_.doorLock.shouldAutoRelock())
-            return;
-
-        lockServo_.write(0);
-        digitalWrite(LED_PIN, LOW);
-
-        appState_.doorLock.lock();
-        appState_.deviceState.setDoorState(DoorState::LOCKED);
-
-        publish_.publishState("locked", "auto");
-    }
-
-    void
     serviceTempPasscodeExpiry_()
     {
         if (!passRepo_.hasTemp())
@@ -257,6 +228,9 @@ class AppImpl
     std::vector<String> iccardsCache_;
 
     PublishService publish_;
+    AppContext ctx_;
+    DoorLockModule doorLock_;
+
     MqttService mqtt_;
     BleProvisionService ble_;
     HttpService http_;
@@ -270,11 +244,13 @@ class AppImpl
 static AppImpl g_app;
 
 App::App() = default;
+
 void
 App::begin()
 {
     g_app.begin();
 }
+
 void
 App::loop()
 {
