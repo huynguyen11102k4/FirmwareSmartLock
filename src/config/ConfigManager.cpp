@@ -1,27 +1,32 @@
 #include "ConfigManager.h"
 
-bool ConfigManager::load()
+bool
+ConfigManager::load()
 {
     config.clear();
     return repo.load(config);
 }
 
-void ConfigManager::save()
+void
+ConfigManager::save()
 {
     repo.save(config);
 }
 
-bool ConfigManager::isProvisioned() const
+bool
+ConfigManager::isProvisioned() const
 {
     return config.isValid();
 }
 
-const AppConfig &ConfigManager::get() const
+const AppConfig&
+ConfigManager::get() const
 {
     return config;
 }
 
-bool ConfigManager::updateFromBle(const AppConfig &cfg)
+bool
+ConfigManager::updateFromBle(const AppConfig& cfg)
 {
     if (!cfg.isValid())
         return false;

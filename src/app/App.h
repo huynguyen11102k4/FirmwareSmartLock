@@ -2,13 +2,16 @@
 
 class App
 {
-public:
+  public:
     App();
-    void begin();
-    void loop();
+    void
+    begin();
+    void
+    loop();
 
-private:
+  private:
     // no copy
-    App(const App &) = delete;
-    App &operator=(const App &) = delete;
+    App(const App&) = delete;
+    App&
+    operator=(const App&) = delete;
 };

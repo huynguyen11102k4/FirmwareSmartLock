@@ -1,14 +1,17 @@
-#include <Arduino.h>
 #include "app/App.h"
+
+#include <Arduino.h>
 
 static App app;
 
-void setup()
+void
+setup()
 {
-  app.begin();
+    app.begin();
 }
 
-void loop()
+void
+loop()
 {
-  app.loop();
+    app.loop();
 }

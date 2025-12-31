@@ -1,33 +1,36 @@
 #pragma once
+#include "app/services/PublishService.h"
+#include "models/AppState.h"
+#include "storage/PasscodeRepository.h"
+
 #include <Arduino.h>
 #include <Keypad.h>
 
-#include "models/AppState.h"
-#include "storage/PasscodeRepository.h"
-#include "app/services/PublishService.h"
+class KeypadService
+{
+  public:
+    using UnlockFn = void (*)(void* ctx, const String& method);
 
-class KeypadService {
-public:
-  using UnlockFn = void (*)(void* ctx, const String& method);
+    KeypadService(
+        AppState& appState, PasscodeRepository& passRepo, PublishService& publish, void* ctx,
+        UnlockFn onUnlock
+    );
 
-  KeypadService(AppState& appState,
-                PasscodeRepository& passRepo,
-                PublishService& publish,
-                void* ctx,
-                UnlockFn onUnlock);
+    void
+    begin();
+    void
+    loop();
 
-  void begin();
-  void loop();
+  private:
+    bool
+    checkPIN_(const String& pin);
 
-private:
-  bool checkPIN_(const String& pin);
+    AppState& appState_;
+    PasscodeRepository& passRepo_;
+    PublishService& publish_;
 
-  AppState& appState_;
-  PasscodeRepository& passRepo_;
-  PublishService& publish_;
+    void* ctx_{nullptr};
+    UnlockFn onUnlock_{nullptr};
 
-  void* ctx_{nullptr};
-  UnlockFn onUnlock_{nullptr};
-
-  Keypad keypad_;
+    Keypad keypad_;
 };

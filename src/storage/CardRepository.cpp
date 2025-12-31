@@ -1,8 +1,10 @@
 #include "CardRepository.h"
+
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 
-bool CardRepository::load()
+bool
+CardRepository::load()
 {
     _cards.clear();
     if (!FileSystem::exists(PATH))
@@ -20,24 +22,27 @@ bool CardRepository::load()
     return true;
 }
 
-bool CardRepository::save()
+bool
+CardRepository::save()
 {
     DynamicJsonDocument doc(512);
     JsonArray arr = doc.createNestedArray("cards");
-    for (auto &c : _cards)
+    for (auto& c : _cards)
         arr.add(c);
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
-bool CardRepository::exists(const String &uid) const
+bool
+CardRepository::exists(const String& uid) const
 {
-    for (auto &c : _cards)
+    for (auto& c : _cards)
         if (c == uid)
             return true;
     return false;
 }
 
-bool CardRepository::add(const String &uid)
+bool
+CardRepository::add(const String& uid)
 {
     if (exists(uid))
         return false;
@@ -45,7 +50,8 @@ bool CardRepository::add(const String &uid)
     return save();
 }
 
-bool CardRepository::remove(const String &uid)
+bool
+CardRepository::remove(const String& uid)
 {
     for (auto it = _cards.begin(); it != _cards.end(); ++it)
     {

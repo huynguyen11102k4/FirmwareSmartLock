@@ -1,14 +1,17 @@
 #include "ConfigRepository.h"
+
 #include "AppPaths.h"
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 
-bool ConfigRepository::exists() const
+bool
+ConfigRepository::exists() const
 {
     return FileSystem::exists(AppPaths::CONFIG_JSON);
 }
 
-bool ConfigRepository::load(AppConfig &cfg)
+bool
+ConfigRepository::load(AppConfig& cfg)
 {
     if (!exists())
         return false;
@@ -33,7 +36,8 @@ bool ConfigRepository::load(AppConfig &cfg)
     return true;
 }
 
-bool ConfigRepository::save(const AppConfig &cfg)
+bool
+ConfigRepository::save(const AppConfig& cfg)
 {
     DynamicJsonDocument doc(512);
     doc[AppJsonKeys::WIFI_SSID] = cfg.wifiSsid;

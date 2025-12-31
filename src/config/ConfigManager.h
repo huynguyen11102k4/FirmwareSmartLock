@@ -4,16 +4,21 @@
 
 class ConfigManager
 {
-public:
-    bool load();
-    void save();
+  public:
+    bool
+    load();
+    void
+    save();
 
-    bool isProvisioned() const;
-    const AppConfig &get() const;
+    bool
+    isProvisioned() const;
+    const AppConfig&
+    get() const;
 
-    bool updateFromBle(const AppConfig &cfg);
+    bool
+    updateFromBle(const AppConfig& cfg);
 
-private:
+  private:
     AppConfig config;
     ConfigRepository repo;
 };

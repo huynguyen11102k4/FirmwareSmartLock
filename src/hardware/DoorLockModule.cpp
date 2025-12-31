@@ -1,66 +1,88 @@
 #include "hardware/DoorLockModule.h"
 
-// These are from your project includes.
 #include "models/AppState.h"
-#include "models/DoorLockState.h"
 #include "models/DeviceState.h"
-#include "utils/JsonUtils.h"
+#include "models/DoorLockState.h"
 #include "network/MqttManager.h"
+#include "utils/JsonUtils.h"
 
-struct AppContext {
-  AppState* app;
-  void (*publishState)(const String&, const String&);
-  void (*publishLog)(const String&, const String&, const String&);
+static constexpr uint8_t LOCK_ANGLE = 0;
+static constexpr uint8_t UNLOCK_ANGLE = 90;
+
+struct AppContext
+{
+    AppState* app;
+    void (*publishState)(const String&, const String&);
+    void (*publishLog)(const String&, const String&, const String&);
 };
 
 DoorLockModule::DoorLockModule(Servo& servo, uint8_t ledPin, uint8_t servoPin)
-  : servo_(servo), ledPin_(ledPin), servoPin_(servoPin) {}
-
-void DoorLockModule::setDoorOpen(bool open) { doorOpen_ = open; }
-
-void DoorLockModule::begin(AppContext&) {
-  pinMode(ledPin_, OUTPUT);
-  digitalWrite(ledPin_, LOW);
-  servo_.attach(servoPin_);
-  servo_.write(0);
+    : servo_(servo), ledPin_(ledPin), servoPin_(servoPin)
+{
 }
 
-void DoorLockModule::beginUnlock(AppContext& ctx, const String& method) {
-  digitalWrite(ledPin_, HIGH);
-  servo_.write(90);
-
-  ctx.app->doorLock.unlock();
-  ctx.app->device.setDoorState(DoorState::UNLOCKED);
-
-  ctx.publishState("unlocked", method);
-  ctx.publishLog("unlock", method, "");
+void
+DoorLockModule::onDoorContactChanged(bool isOpen)
+{
+    isDoorContactOpen_ = isOpen;
 }
 
-void DoorLockModule::forceLock(AppContext& ctx, const String& reason) {
-  servo_.write(0);
-  digitalWrite(ledPin_, LOW);
-
-  ctx.app->doorLock.lock();
-  ctx.app->device.setDoorState(DoorState::LOCKED);
-
-  ctx.publishState("locked", reason);
-  ctx.publishLog("lock", reason, "");
+void
+DoorLockModule::begin(AppContext&)
+{
+    pinMode(ledPin_, OUTPUT);
+    digitalWrite(ledPin_, LOW);
+    servo_.attach(servoPin_);
+    servo_.write(LOCK_ANGLE);
 }
 
-void DoorLockModule::serviceAutoRelock_(AppContext& ctx) {
-  if (doorOpen_) return; // why: avoid locking while door is physically open
+void
+DoorLockModule::unlock(AppContext& ctx, const String& method)
+{
+    digitalWrite(ledPin_, HIGH);
+    servo_.write(UNLOCK_ANGLE);
 
-  if (ctx.app->doorLock.shouldAutoRelock()) {
-    servo_.write(0);
+    ctx.app->doorLock.unlock();
+    ctx.app->deviceState.setDoorState(DoorState::UNLOCKED);
+
+    ctx.publishState(MqttDoorState::UNLOCKED, method);
+    ctx.publishLog(MqttDoorEvent::UNLOCK, method, "");
+}
+
+void
+DoorLockModule::lock(AppContext& ctx, const String& method)
+{
+    servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);
 
     ctx.app->doorLock.lock();
-    ctx.app->device.setDoorState(DoorState::LOCKED);
+    ctx.app->deviceState.setDoorState(DoorState::LOCKED);
 
-    ctx.publishState("locked", "auto");
-  }
+    ctx.publishState(MqttDoorState::LOCKED, method);
+    ctx.publishLog(MqttDoorEvent::LOCK, method, "");
 }
 
-void DoorLockModule::loop(AppContext& ctx) {
-  serviceAutoRelock_(ctx);
+void
+DoorLockModule::handleAutoRelock_(AppContext& ctx)
+{
+    if (isDoorContactOpen_)
+        return;
+
+    if (ctx.app->doorLock.shouldAutoRelock())
+    {
+        servo_.write(LOCK_ANGLE);
+        digitalWrite(ledPin_, LOW);
+
+        ctx.app->doorLock.lock();
+        ctx.app->deviceState.setDoorState(DoorState::LOCKED);
+
+        ctx.publishState(MqttDoorState::LOCKED, MqttSource::AUTO);
+        ctx.publishLog(MqttDoorEvent::LOCK, MqttSource::AUTO, "");
+    }
+}
+
+void
+DoorLockModule::loop(AppContext& ctx)
+{
+    handleAutoRelock_(ctx);
 }

@@ -1,233 +1,282 @@
 #include "app/App.h"
 
-#include <Arduino.h>
-#include <WiFi.h>
-#include <Servo.h>
-#include <time.h>
-
-#include "storage/FileSystem.h"
-#include "utils/Logger.h"
-#include "utils/JsonUtils.h"
-#include "utils/TimeUtils.h"
-
-#include "storage/CardRepository.h"
-#include "storage/PasscodeRepository.h"
-
-#include "models/PasscodeTemp.h"
-#include "models/AppState.h"
-
-#include "config/AppConfig.h"
-#include "config/AppPaths.h"
-#include "config/ConfigManager.h"
-
-#include "network/NetworkManager.h"
-#include "network/MqttManager.h"
-
-#include "config/HardwarePins.h"
-#include "config/TimeConfig.h"
-
-#include "app/services/PublishService.h"
-#include "app/services/MqttService.h"
 #include "app/services/BleProvisionService.h"
 #include "app/services/HttpService.h"
 #include "app/services/KeypadService.h"
+#include "app/services/MqttService.h"
+#include "app/services/PublishService.h"
 #include "app/services/RfidService.h"
+#include "config/AppConfig.h"
+#include "config/AppPaths.h"
+#include "config/ConfigManager.h"
+#include "config/HardwarePins.h"
+#include "config/TimeConfig.h"
+#include "models/AppState.h"
+#include "models/PasscodeTemp.h"
+#include "network/MqttManager.h"
+#include "network/NetworkManager.h"
+#include "storage/CardRepository.h"
+#include "storage/FileSystem.h"
+#include "storage/PasscodeRepository.h"
+#include "utils/JsonUtils.h"
+#include "utils/Logger.h"
+#include "utils/TimeUtils.h"
 
-class AppImpl {
-public:
-  AppImpl()
-    : publish_(appState_, passRepo_, iccardsCache_),
-      mqtt_(appState_, passRepo_, cardRepo_, iccardsCache_, publish_,
-            this, &AppImpl::syncThunk_, &AppImpl::batteryThunk_,
-            &AppImpl::unlockThunk_, &AppImpl::lockThunk_),
-      ble_(appState_, cfgMgr_, mqtt_),
-      http_(appState_, this, &AppImpl::batteryThunk_),
-      keypad_(appState_, passRepo_, publish_, this, &AppImpl::unlockThunk_),
-      rfid_(appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_, &AppImpl::unlockThunk_) {}
+#include <Arduino.h>
+#include <Servo.h>
+#include <WiFi.h>
+#include <time.h>
 
-  void begin() {
-    Logger::begin(115200);
-    Logger::info("APP", "Smart Lock Starting...");
-
-    FileSystem::begin();
-    configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
-
-    lockServo_.attach(SERVO_PIN);
-    lockServo_.write(0);
-
-    WiFi.mode(WIFI_STA);
-    delay(100);
-
-    appState_.init(WiFi.macAddress());
-
-    passRepo_.load();
-    cardRepo_.load();
-    syncIccardsCacheFromRepositoryFile_();
-
-    const bool hasConfig = cfgMgr_.load();
-    setBaseTopicFromConfigOrDefault_();
-
-    rfid_.begin();
-    keypad_.begin();
-    http_.begin();
-
-    if (!hasConfig || !cfgMgr_.isProvisioned()) {
-      ble_.begin();
-    } else {
-      ble_.disableIfActive();
-      const String clientId = "ESP32DoorLock-" + appState_.deviceMAC;
-      NetworkManager::begin(cfgMgr_.get(), clientId);
-      mqtt_.attachCallback();
-    }
-  }
-
-  void loop() {
-    NetworkManager::loop();
-    serviceDoorAutoRelock_();
-
-    const bool isConnected = MqttManager::connected();
-    if (isConnected && !wasConnected_) {
-      ble_.disableIfActive();
-      mqtt_.onConnected(/*infoVersion=*/1);
-    }
-    wasConnected_ = isConnected;
-
-    http_.loop();
-
-    if (appState_.shouldPublishBattery()) {
-      publish_.publishBattery(readBatteryPercent_());
-      appState_.markBatteryPublished();
+class AppImpl
+{
+  public:
+    AppImpl()
+        : publish_(appState_, passRepo_, iccardsCache_),
+          mqtt_(
+              appState_, passRepo_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
+              &AppImpl::batteryThunk_, &AppImpl::unlockThunk_, &AppImpl::lockThunk_
+          ),
+          ble_(appState_, cfgMgr_, mqtt_), http_(appState_, this, &AppImpl::batteryThunk_),
+          keypad_(appState_, passRepo_, publish_, this, &AppImpl::unlockThunk_),
+          rfid_(
+              appState_, cardRepo_, iccardsCache_, publish_, this, &AppImpl::syncThunk_,
+              &AppImpl::unlockThunk_
+          )
+    {
     }
 
-    if (appState_.shouldSync()) {
-      publish_.publishPasscodeList();
-      appState_.markSynced();
+    void
+    begin()
+    {
+        Logger::begin(115200);
+        Logger::info("APP", "Smart Lock Starting...");
+
+        FileSystem::begin();
+        configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+
+        pinMode(LED_PIN, OUTPUT);
+        digitalWrite(LED_PIN, LOW);
+
+        lockServo_.attach(SERVO_PIN);
+        lockServo_.write(0);
+
+        WiFi.mode(WIFI_STA);
+        delay(100);
+
+        appState_.init(WiFi.macAddress());
+
+        passRepo_.load();
+        cardRepo_.load();
+        syncIccardsCacheFromRepositoryFile_();
+
+        const bool hasConfig = cfgMgr_.load();
+        setBaseTopicFromConfigOrDefault_();
+
+        rfid_.begin();
+        keypad_.begin();
+        http_.begin();
+
+        if (!hasConfig || !cfgMgr_.isProvisioned())
+        {
+            ble_.begin();
+        }
+        else
+        {
+            ble_.disableIfActive();
+            const String clientId = "ESP32DoorLock-" + appState_.macAddress;
+            NetworkManager::begin(cfgMgr_.get(), clientId);
+            mqtt_.attachCallback();
+        }
     }
 
-    keypad_.loop();
-    rfid_.loop();
-    serviceTempPasscodeExpiry_();
+    void
+    loop()
+    {
+        NetworkManager::loop();
+        serviceDoorAutoRelock_();
 
-    yield();
-  }
+        const bool isConnected = MqttManager::connected();
+        if (isConnected && !wasConnected_)
+        {
+            ble_.disableIfActive();
+            mqtt_.onConnected(/*infoVersion=*/1);
+        }
+        wasConnected_ = isConnected;
 
-private:
-  static void syncThunk_(void* ctx) {
-    static_cast<AppImpl*>(ctx)->syncIccardsCacheFromRepositoryFile_();
-  }
+        http_.loop();
 
-  static int batteryThunk_(void* ctx) {
-    return static_cast<AppImpl*>(ctx)->readBatteryPercent_();
-  }
+        if (appState_.shouldPublishBattery())
+        {
+            publish_.publishBattery(readBatteryPercent_());
+            appState_.markBatteryPublished();
+        }
 
-  static void unlockThunk_(void* ctx, const String& method) {
-    static_cast<AppImpl*>(ctx)->beginUnlock_(method);
-  }
+        if (appState_.shouldSync())
+        {
+            publish_.publishPasscodeList();
+            appState_.markSynced();
+        }
 
-  static void lockThunk_(void* ctx, const String& reason) {
-    static_cast<AppImpl*>(ctx)->forceLock_(reason);
-  }
+        keypad_.loop();
+        rfid_.loop();
+        serviceTempPasscodeExpiry_();
 
-  int readBatteryPercent_() {
-    int raw = analogRead(BATTERY_PIN);
-    float v = (raw / 4095.0f) * 3.3f * 2.0f;
-    float percent = (v - 3.3f) / (4.2f - 3.3f) * 100.0f;
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-    return (int)percent;
-  }
-
-  void syncIccardsCacheFromRepositoryFile_() {
-    iccardsCache_.clear();
-
-    if (!FileSystem::exists(AppPaths::CARDS_JSON)) return;
-
-    const String json = FileSystem::readFile(AppPaths::CARDS_JSON);
-    DynamicJsonDocument doc(1024);
-    if (!JsonUtils::deserialize(json, doc)) return;
-
-    if (doc.containsKey(AppJsonKeys::CARDS) && doc[AppJsonKeys::CARDS].is<JsonArray>()) {
-      for (JsonVariant v : doc[AppJsonKeys::CARDS].as<JsonArray>()) {
-        iccardsCache_.push_back(v.as<String>());
-      }
+        yield();
     }
-  }
 
-  void setBaseTopicFromConfigOrDefault_() {
-    const AppConfig& cfg = cfgMgr_.get();
-    appState_.setBaseTopic(cfg.topicPrefix);
-  }
-
-  void beginUnlock_(const String& method) {
-    digitalWrite(LED_PIN, HIGH);
-    lockServo_.write(90);
-
-    appState_.doorLock.unlock();
-    appState_.device.setDoorState(DoorState::UNLOCKED);
-
-    publish_.publishState("unlocked", method);
-    publish_.publishLog("unlock", method);
-  }
-
-  void forceLock_(const String& reason) {
-    lockServo_.write(0);
-    digitalWrite(LED_PIN, LOW);
-
-    appState_.doorLock.lock();
-    appState_.device.setDoorState(DoorState::LOCKED);
-
-    publish_.publishState("locked", reason);
-    publish_.publishLog("lock", reason);
-  }
-
-  void serviceDoorAutoRelock_() {
-    if (!appState_.doorLock.shouldAutoRelock()) return;
-
-    lockServo_.write(0);
-    digitalWrite(LED_PIN, LOW);
-
-    appState_.doorLock.lock();
-    appState_.device.setDoorState(DoorState::LOCKED);
-
-    publish_.publishState("locked", "auto");
-  }
-
-  void serviceTempPasscodeExpiry_() {
-    if (!passRepo_.hasTemp()) return;
-
-    const PasscodeTemp t = passRepo_.getTemp();
-    if (t.isExpired(TimeUtils::nowSeconds())) {
-      passRepo_.clearTemp();
-      publish_.publishPasscodeList();
+  private:
+    static void
+    syncThunk_(void* ctx)
+    {
+        static_cast<AppImpl*>(ctx)->syncIccardsCacheFromRepositoryFile_();
     }
-  }
 
-private:
-  Servo lockServo_;
+    static int
+    batteryThunk_(void* ctx)
+    {
+        return static_cast<AppImpl*>(ctx)->readBatteryPercent_();
+    }
 
-  PasscodeRepository passRepo_;
-  CardRepository cardRepo_;
-  ConfigManager cfgMgr_;
+    static void
+    unlockThunk_(void* ctx, const String& method)
+    {
+        static_cast<AppImpl*>(ctx)->beginUnlock_(method);
+    }
 
-  AppState appState_;
-  std::vector<String> iccardsCache_;
+    static void
+    lockThunk_(void* ctx, const String& reason)
+    {
+        static_cast<AppImpl*>(ctx)->forceLock_(reason);
+    }
 
-  PublishService publish_;
-  MqttService mqtt_;
-  BleProvisionService ble_;
-  HttpService http_;
-  KeypadService keypad_;
-  RfidService rfid_;
+    int
+    readBatteryPercent_()
+    {
+        int raw = analogRead(BATTERY_PIN);
+        float v = (raw / 4095.0f) * 3.3f * 2.0f;
+        float percent = (v - 3.3f) / (4.2f - 3.3f) * 100.0f;
+        if (percent < 0)
+            percent = 0;
+        if (percent > 100)
+            percent = 100;
+        return (int)percent;
+    }
 
-  bool wasConnected_{false};
+    void
+    syncIccardsCacheFromRepositoryFile_()
+    {
+        iccardsCache_.clear();
+
+        if (!FileSystem::exists(AppPaths::CARDS_JSON))
+            return;
+
+        const String json = FileSystem::readFile(AppPaths::CARDS_JSON);
+        DynamicJsonDocument doc(1024);
+        if (!JsonUtils::deserialize(json, doc))
+            return;
+
+        if (doc.containsKey(AppJsonKeys::CARDS) && doc[AppJsonKeys::CARDS].is<JsonArray>())
+        {
+            for (JsonVariant v : doc[AppJsonKeys::CARDS].as<JsonArray>())
+            {
+                iccardsCache_.push_back(v.as<String>());
+            }
+        }
+    }
+
+    void
+    setBaseTopicFromConfigOrDefault_()
+    {
+        const AppConfig& cfg = cfgMgr_.get();
+        appState_.setMqttTopicPrefix(cfg.topicPrefix);
+    }
+
+    void
+    beginUnlock_(const String& method)
+    {
+        digitalWrite(LED_PIN, HIGH);
+        lockServo_.write(90);
+
+        appState_.doorLock.unlock();
+        appState_.deviceState.setDoorState(DoorState::UNLOCKED);
+
+        publish_.publishState("unlocked", method);
+        publish_.publishLog("unlock", method);
+    }
+
+    void
+    forceLock_(const String& reason)
+    {
+        lockServo_.write(0);
+        digitalWrite(LED_PIN, LOW);
+
+        appState_.doorLock.lock();
+        appState_.deviceState.setDoorState(DoorState::LOCKED);
+
+        publish_.publishState("locked", reason);
+        publish_.publishLog("lock", reason);
+    }
+
+    void
+    serviceDoorAutoRelock_()
+    {
+        if (!appState_.doorLock.shouldAutoRelock())
+            return;
+
+        lockServo_.write(0);
+        digitalWrite(LED_PIN, LOW);
+
+        appState_.doorLock.lock();
+        appState_.deviceState.setDoorState(DoorState::LOCKED);
+
+        publish_.publishState("locked", "auto");
+    }
+
+    void
+    serviceTempPasscodeExpiry_()
+    {
+        if (!passRepo_.hasTemp())
+            return;
+
+        const PasscodeTemp t = passRepo_.getTemp();
+        if (t.isExpired(TimeUtils::nowSeconds()))
+        {
+            passRepo_.clearTemp();
+            publish_.publishPasscodeList();
+        }
+    }
+
+  private:
+    Servo lockServo_;
+
+    PasscodeRepository passRepo_;
+    CardRepository cardRepo_;
+    ConfigManager cfgMgr_;
+
+    AppState appState_;
+    std::vector<String> iccardsCache_;
+
+    PublishService publish_;
+    MqttService mqtt_;
+    BleProvisionService ble_;
+    HttpService http_;
+    KeypadService keypad_;
+    RfidService rfid_;
+
+    bool wasConnected_{false};
 };
 
 // Wrapper
 static AppImpl g_app;
 
 App::App() = default;
-void App::begin() { g_app.begin(); }
-void App::loop() { g_app.loop(); }
+void
+App::begin()
+{
+    g_app.begin();
+}
+void
+App::loop()
+{
+    g_app.loop();
+}

@@ -1,25 +1,33 @@
 #pragma once
-#include <Arduino.h>
-#include <Servo.h>
 #include "hardware/IHardwareModule.h"
 
-class DoorLockModule final : public IHardwareModule {
-public:
-  DoorLockModule(Servo& servo, uint8_t ledPin, uint8_t servoPin);
+#include <Arduino.h>
+#include <Servo.h>
 
-  void beginUnlock(AppContext& ctx, const String& method);
-  void forceLock(AppContext& ctx, const String& reason);
+class DoorLockModule final : public IHardwareModule
+{
+  public:
+    DoorLockModule(Servo& servo, uint8_t ledPin, uint8_t servoPin);
 
-  void setDoorOpen(bool open);
+    void
+    unlock(AppContext& ctx, const String& method);
+    void
+    lock(AppContext& ctx, const String& reason);
 
-  void begin(AppContext& ctx) override;
-  void loop(AppContext& ctx) override;
+    void
+    onDoorContactChanged(bool open);
 
-private:
-  void serviceAutoRelock_(AppContext& ctx);
+    void
+    begin(AppContext& ctx) override;
+    void
+    loop(AppContext& ctx) override;
 
-  Servo& servo_;
-  uint8_t ledPin_;
-  uint8_t servoPin_;
-  bool doorOpen_{false};
+  private:
+    void
+    handleAutoRelock_(AppContext& ctx);
+
+    Servo& servo_;
+    uint8_t ledPin_;
+    uint8_t servoPin_;
+    bool isDoorContactOpen_{false};
 };

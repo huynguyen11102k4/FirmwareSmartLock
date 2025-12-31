@@ -1,8 +1,10 @@
 #include "PasscodeRepository.h"
+
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 
-bool PasscodeRepository::load()
+bool
+PasscodeRepository::load()
 {
     if (!FileSystem::exists(PATH))
         return true;
@@ -21,12 +23,14 @@ bool PasscodeRepository::load()
     return true;
 }
 
-String PasscodeRepository::getMaster() const
+String
+PasscodeRepository::getMaster() const
 {
     return _master;
 }
 
-bool PasscodeRepository::setMaster(const String &pass)
+bool
+PasscodeRepository::setMaster(const String& pass)
 {
     _master = pass;
 
@@ -40,17 +44,20 @@ bool PasscodeRepository::setMaster(const String &pass)
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
-bool PasscodeRepository::hasTemp() const
+bool
+PasscodeRepository::hasTemp() const
 {
     return _hasTemp;
 }
 
-PasscodeTemp PasscodeRepository::getTemp() const
+PasscodeTemp
+PasscodeRepository::getTemp() const
 {
     return _temp;
 }
 
-bool PasscodeRepository::setTemp(const PasscodeTemp &temp)
+bool
+PasscodeRepository::setTemp(const PasscodeTemp& temp)
 {
     _temp = temp;
     _hasTemp = true;
@@ -62,7 +69,8 @@ bool PasscodeRepository::setTemp(const PasscodeTemp &temp)
     return FileSystem::writeFile(PATH, JsonUtils::serialize(doc));
 }
 
-bool PasscodeRepository::clearTemp()
+bool
+PasscodeRepository::clearTemp()
 {
     _hasTemp = false;
 

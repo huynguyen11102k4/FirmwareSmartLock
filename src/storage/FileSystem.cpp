@@ -1,17 +1,21 @@
 #include "FileSystem.h"
+
 #include <SPIFFS.h>
 
-bool FileSystem::begin()
+bool
+FileSystem::begin()
 {
     return SPIFFS.begin(true);
 }
 
-bool FileSystem::exists(const char *path)
+bool
+FileSystem::exists(const char* path)
 {
     return SPIFFS.exists(path);
 }
 
-String FileSystem::readFile(const char *path)
+String
+FileSystem::readFile(const char* path)
 {
     File f = SPIFFS.open(path, "r");
     if (!f)
@@ -24,7 +28,8 @@ String FileSystem::readFile(const char *path)
     return content;
 }
 
-bool FileSystem::writeFile(const char *path, const String &content)
+bool
+FileSystem::writeFile(const char* path, const String& content)
 {
     File f = SPIFFS.open(path, "w");
     if (!f)
@@ -34,7 +39,8 @@ bool FileSystem::writeFile(const char *path, const String &content)
     return true;
 }
 
-bool FileSystem::remove(const char *path)
+bool
+FileSystem::remove(const char* path)
 {
     return SPIFFS.remove(path);
 }

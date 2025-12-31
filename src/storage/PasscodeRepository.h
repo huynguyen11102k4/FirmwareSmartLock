@@ -1,24 +1,32 @@
 #pragma once
-#include <Arduino.h>
 #include "models/PasscodeTemp.h"
+
+#include <Arduino.h>
 
 class PasscodeRepository
 {
-public:
-    bool load();
+  public:
+    bool
+    load();
 
-    String getMaster() const;
-    bool setMaster(const String &pass);
+    String
+    getMaster() const;
+    bool
+    setMaster(const String& pass);
 
-    bool hasTemp() const;
-    PasscodeTemp getTemp() const;
-    bool setTemp(const PasscodeTemp &temp);
-    bool clearTemp();
+    bool
+    hasTemp() const;
+    PasscodeTemp
+    getTemp() const;
+    bool
+    setTemp(const PasscodeTemp& temp);
+    bool
+    clearTemp();
 
-private:
+  private:
     String _master;
     PasscodeTemp _temp;
     bool _hasTemp = false;
 
-    static constexpr const char *PATH = "/passcode.json";
+    static constexpr const char* PATH = "/passcode.json";
 };

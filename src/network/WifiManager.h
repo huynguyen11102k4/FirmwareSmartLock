@@ -1,15 +1,21 @@
 #pragma once
-#include <WiFi.h>
 #include "config/AppConfig.h"
 
-class WifiManager {
-public:
-  static void begin(const AppConfig& cfg);
-  static void loop();
+#include <WiFi.h>
 
-  static bool connected();
-  static String ip();
+class WifiManager
+{
+  public:
+    static void
+    begin(const AppConfig& cfg);
+    static void
+    loop();
 
-private:
-  static bool configured;
+    static bool
+    connected();
+    static String
+    ip();
+
+  private:
+    static bool configured;
 };

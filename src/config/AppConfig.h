@@ -13,17 +13,20 @@ struct AppConfig
 
     String topicPrefix;
 
-    bool hasWifi() const
+    bool
+    hasWifi() const
     {
         return wifiSsid.length() > 0;
     }
 
-    bool hasMqtt() const
+    bool
+    hasMqtt() const
     {
         return mqttHost.length() > 0 && mqttPort > 0;
     }
 
-    bool isValid() const
+    bool
+    isValid() const
     {
         return hasWifi() && hasMqtt();
     }
@@ -35,7 +38,8 @@ struct AppConfig
         MQTT_ONLY
     };
 
-    void clear(ClearMode mode = ClearMode::ALL)
+    void
+    clear(ClearMode mode = ClearMode::ALL)
     {
         if (mode == ClearMode::ALL || mode == ClearMode::WIFI_ONLY)
         {

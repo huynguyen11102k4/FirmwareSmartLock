@@ -19,12 +19,14 @@ struct Command
     String source;
     String payload; // JSON string
 
-    bool isValid() const
+    bool
+    isValid() const
     {
         return type != CommandType::NONE;
     }
 
-    static Command none()
+    static Command
+    none()
     {
         return {};
     }

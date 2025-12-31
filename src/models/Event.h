@@ -14,5 +14,5 @@ enum class EventType : uint8_t
 struct Event
 {
     EventType type;
-    JsonDocument data;
+    void* data;
 };
