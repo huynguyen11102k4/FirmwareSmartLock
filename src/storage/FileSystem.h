@@ -17,5 +17,8 @@ class FileSystem
     writeFile(const char* path, const String& content);
 
     static bool
+    writeFileAtomic(const char* path, const String& content);
+
+    static bool
     remove(const char* path);
 };

@@ -17,5 +17,10 @@ static constexpr const char* MQTT_USER = "mqtt_user";
 static constexpr const char* MQTT_PASS = "mqtt_pass";
 static constexpr const char* TOPIC_PREFIX = "topic_prefix";
 
-static constexpr const char* CARDS = "cards";
+static constexpr const char* CARDS = "items";
+static constexpr const char* PASSCODES = "items";
+static constexpr const char* PASSCODES_MASTER = "master";
+static constexpr const char* PASSCODES_TEMP = "temp";
+
+static constexpr const char* TS = "ts";
 } // namespace AppJsonKeys

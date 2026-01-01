@@ -3,5 +3,7 @@
   "temp": {
     "code": "999999",
     "expireAt": 1700000000
-  }
+  },
+  "items": [],
+  "ts": null
 }
