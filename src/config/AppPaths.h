@@ -3,8 +3,8 @@
 namespace AppPaths
 {
 static constexpr const char* CONFIG_JSON = "/config.json";
-static constexpr const char* CARDS_JSON = "/cards.json";
-static constexpr const char* PASSCODES_JSON = "/passcode.json";
+static constexpr const char* CARDS_JSON = "/iccards.json";
+static constexpr const char* PASSCODES_JSON = "/passcodes.json";
 } // namespace AppPaths
 
 namespace AppJsonKeys

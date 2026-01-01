@@ -16,40 +16,20 @@ static constexpr byte ROWS = 4;
 static constexpr byte COLS = 4;
 
 static char KEYS[ROWS][COLS] = {
-    {'D', 'C', 'B', 'A'},
-    {'#', '9', '6', '3'},
-    {'0', '8', '5', '2'},
-    {'*', '7', '4', '1'}
+    {'D', 'C', 'B', 'A'}, {'#', '9', '6', '3'}, {'0', '8', '5', '2'}, {'*', '7', '4', '1'}
 };
 
-static byte ROW_PINS[ROWS] = {
-    KEYPAD_ROW_1,
-    KEYPAD_ROW_2,
-    KEYPAD_ROW_3,
-    KEYPAD_ROW_4
-};
+static byte ROW_PINS[ROWS] = {KEYPAD_ROW_1, KEYPAD_ROW_2, KEYPAD_ROW_3, KEYPAD_ROW_4};
 
-static byte COL_PINS[COLS] = {
-    KEYPAD_COL_1,
-    KEYPAD_COL_2,
-    KEYPAD_COL_3,
-    KEYPAD_COL_4
-};
+static byte COL_PINS[COLS] = {KEYPAD_COL_1, KEYPAD_COL_2, KEYPAD_COL_3, KEYPAD_COL_4};
 } // namespace
 
 KeypadService::KeypadService(
-    AppState& appState,
-    PasscodeRepository& passRepo,
-    PublishService& publish,
-    DoorHardware& door,
+    AppState& appState, PasscodeRepository& passRepo, PublishService& publish, DoorHardware& door,
     const LockConfig& lockConfig
 )
-    : appState_(appState)
-    , passRepo_(passRepo)
-    , publish_(publish)
-    , door_(door)
-    , lockConfig_(lockConfig)
-    , keypad_(makeKeymap(KEYS), ROW_PINS, COL_PINS, ROWS, COLS)
+    : appState_(appState), passRepo_(passRepo), publish_(publish), door_(door),
+      lockConfig_(lockConfig), keypad_(makeKeymap(KEYS), ROW_PINS, COL_PINS, ROWS, COLS)
 {
 }
 
@@ -59,21 +39,13 @@ KeypadService::begin()
     Logger::info("KEYPAD", "=== KEYPAD SERVICE INIT ===");
 
     const String master = passRepo_.getMaster();
-    Logger::info(
-        "KEYPAD",
-        "MASTER PIN loaded: '%s' (len=%d)",
-        master.c_str(),
-        master.length()
-    );
+    Logger::info("KEYPAD", "MASTER PIN loaded: '%s' (len=%d)", master.c_str(), master.length());
 
     if (passRepo_.hasTemp())
     {
         const PasscodeTemp t = passRepo_.getTemp();
         Logger::info(
-            "KEYPAD",
-            "TEMP PIN loaded: '%s' (expire=%ld, now=%ld)",
-            t.code.c_str(),
-            t.expireAt,
+            "KEYPAD", "TEMP PIN loaded: '%s' (expire=%ld, now=%ld)", t.code.c_str(), t.expireAt,
             TimeUtils::nowSeconds()
         );
     }
@@ -159,15 +131,11 @@ KeypadService::loop()
         if ((int)pin.length() < lockConfig_.minPinLength)
         {
             Logger::info(
-                "KEYPAD",
-                "PIN too short (%d < %d)",
-                pin.length(),
-                lockConfig_.minPinLength
+                "KEYPAD", "PIN too short (%d < %d)", pin.length(), lockConfig_.minPinLength
             );
 
             const bool lockedOut = appState_.pinAuth.recordFailedAttempt(
-                lockConfig_.maxFailedAttempts,
-                lockConfig_.lockoutDurationMs
+                lockConfig_.maxFailedAttempts, lockConfig_.lockoutDurationMs
             );
 
             Logger::info("KEYPAD", "PIN auth failed (length)");
@@ -175,8 +143,7 @@ KeypadService::loop()
             if (lockedOut)
             {
                 Logger::info(
-                    "KEYPAD",
-                    "LOCKOUT triggered (%lds remaining)",
+                    "KEYPAD", "LOCKOUT triggered (%lds remaining)",
                     appState_.pinAuth.remainingLockoutSeconds()
                 );
             }
@@ -196,15 +163,13 @@ KeypadService::loop()
             Logger::info("KEYPAD", "PIN auth FAILED");
 
             const bool lockedOut = appState_.pinAuth.recordFailedAttempt(
-                lockConfig_.maxFailedAttempts,
-                lockConfig_.lockoutDurationMs
+                lockConfig_.maxFailedAttempts, lockConfig_.lockoutDurationMs
             );
 
             if (lockedOut)
             {
                 Logger::info(
-                    "KEYPAD",
-                    "LOCKOUT triggered (%lds remaining)",
+                    "KEYPAD", "LOCKOUT triggered (%lds remaining)",
                     appState_.pinAuth.remainingLockoutSeconds()
                 );
             }

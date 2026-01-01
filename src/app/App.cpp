@@ -55,7 +55,6 @@ class AppImpl
     {
         Logger::begin(115200);
         Logger::info("APP", "Smart Lock Starting...");
-        Logger::info("APP", "Version: 3.0 (Refactor + Policy Wiring)");
 
         WatchdogManager::begin(30);
         Logger::info("APP", "Watchdog enabled (30s)");

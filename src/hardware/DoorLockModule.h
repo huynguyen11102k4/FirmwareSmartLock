@@ -28,6 +28,9 @@ class DoorLockModule final : public IHardwareModule
     loop(AppContext& ctx) override;
 
   private:
+    uint32_t autoRelockAtMs_ = 0;
+    bool autoRelockArmed_ = false;
+
     void
     handleAutoRelock_(AppContext& ctx);
 

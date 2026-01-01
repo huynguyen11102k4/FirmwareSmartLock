@@ -3,9 +3,12 @@
 #include "config/LockConfig.h"
 #include "models/DeviceState.h"
 #include "models/MqttContract.h"
+#include "utils/Logger.h"
 
 static constexpr uint8_t LOCK_ANGLE = 0;
 static constexpr uint8_t UNLOCK_ANGLE = 90;
+
+#define TAG "DOOR_LOCK"
 
 DoorLockModule::DoorLockModule(Servo& servo, uint8_t ledPin, uint8_t servoPin)
     : servo_(servo), ledPin_(ledPin), servoPin_(servoPin)
@@ -16,25 +19,40 @@ void
 DoorLockModule::onDoorContactChanged(bool isOpen)
 {
     isDoorContactOpen_ = isOpen;
+
+    Logger::info(TAG, "Door contact update: %s", isOpen ? "OPEN" : "CLOSED");
 }
 
 void
 DoorLockModule::begin(AppContext&)
 {
+    Logger::info(TAG, "Initializing DoorLockModule");
+
     pinMode(ledPin_, OUTPUT);
     digitalWrite(ledPin_, LOW);
 
     servo_.attach(servoPin_);
     servo_.write(LOCK_ANGLE);
+
+    Logger::info(
+        TAG, "Servo attached on pin %d, initial state LOCK (angle=%d)", servoPin_, LOCK_ANGLE
+    );
 }
 
 void
 DoorLockModule::unlock(AppContext& ctx, const String& method)
 {
+    Logger::info(TAG, "UNLOCK requested (method=%s)", method.c_str());
+
     digitalWrite(ledPin_, HIGH);
     servo_.write(UNLOCK_ANGLE);
 
-    ctx.app.doorLock.unlock(ctx.lock.unlockDurationMs);
+    autoRelockAtMs_ = millis() + 5000;
+    autoRelockArmed_ = true;
+
+    Logger::info(TAG, "AutoRelock armed after 5000 ms");
+
+    ctx.app.doorLock.unlock(5000); // giữ nguyên hoặc bỏ đều OK
     ctx.app.deviceState.setDoorState(DoorState::UNLOCKED);
 
     ctx.publish.publishState(MqttDoorState::UNLOCKED, method);
@@ -44,11 +62,17 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
 void
 DoorLockModule::lock(AppContext& ctx, const String& reason)
 {
+    Logger::info(TAG, "LOCK requested (reason=%s)", reason.c_str());
+
     servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);
 
+    Logger::info(TAG, "Servo moved to LOCK (angle=%d), LED OFF", LOCK_ANGLE);
+
     ctx.app.doorLock.lock();
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
+
+    Logger::debug(TAG, "DoorLockState updated: state=LOCKED");
 
     ctx.publish.publishState(MqttDoorState::LOCKED, reason);
     ctx.publish.publishLog(MqttDoorEvent::LOCK, reason, "");
@@ -57,14 +81,29 @@ DoorLockModule::lock(AppContext& ctx, const String& reason)
 void
 DoorLockModule::handleAutoRelock_(AppContext& ctx)
 {
+    Logger::debug(
+        TAG, "AutoRelock check | doorOpen=%d | state=%s | remaining=%ds", isDoorContactOpen_,
+        ctx.app.doorLock.getStateString(), ctx.app.doorLock.remainingUnlockSeconds()
+    );
+
     if (isDoorContactOpen_)
+    {
+        Logger::info(TAG, "AutoRelock SKIPPED: door is OPEN");
         return;
+    }
 
     if (!ctx.app.doorLock.shouldAutoRelock())
+    {
+        Logger::debug(TAG, "AutoRelock not due yet");
         return;
+    }
+
+    Logger::info(TAG, "AutoRelock EXECUTE");
 
     servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);
+
+    Logger::info(TAG, "Servo moved to LOCK by AUTO, LED OFF");
 
     ctx.app.doorLock.lock();
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
@@ -76,5 +115,22 @@ DoorLockModule::handleAutoRelock_(AppContext& ctx)
 void
 DoorLockModule::loop(AppContext& ctx)
 {
-    handleAutoRelock_(ctx);
+    if (!autoRelockArmed_)
+        return;
+
+    if ((int32_t)(millis() - autoRelockAtMs_) < 0)
+        return;
+
+    Logger::info(TAG, "AutoRelock EXECUTE (fixed 5s)");
+
+    servo_.write(LOCK_ANGLE);
+    digitalWrite(ledPin_, LOW);
+
+    autoRelockArmed_ = false;
+
+    ctx.app.doorLock.lock();
+    ctx.app.deviceState.setDoorState(DoorState::LOCKED);
+
+    ctx.publish.publishState(MqttDoorState::LOCKED, MqttSource::AUTO);
+    ctx.publish.publishLog(MqttDoorEvent::LOCK, MqttSource::AUTO, "");
 }
