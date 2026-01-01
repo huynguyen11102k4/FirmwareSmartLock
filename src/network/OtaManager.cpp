@@ -1,4 +1,4 @@
-#include "OtaManager.h"
+#include "network/OtaManager.h"
 
 #include "utils/Logger.h"
 
@@ -6,23 +6,29 @@
 
 bool OtaManager::started = false;
 
-// ✅ Set this to your secure OTA password
-static constexpr const char* OTA_PASSWORD = "YourSecurePassword123!";
+#ifndef SMARTLOCK_OTA_PASSWORD
+#define SMARTLOCK_OTA_PASSWORD ""
+#endif
 
 void
 OtaManager::begin(const String& hostname)
 {
     if (started)
         return;
+
     started = true;
 
     ArduinoOTA.setHostname(hostname.c_str());
-
-    // ✅ Enable password protection
-    ArduinoOTA.setPassword(OTA_PASSWORD);
-
-    // ✅ Set port (default 3232, can change for security)
     ArduinoOTA.setPort(3232);
+
+    if (String(SMARTLOCK_OTA_PASSWORD).length() > 0)
+    {
+        ArduinoOTA.setPassword(SMARTLOCK_OTA_PASSWORD);
+    }
+    else
+    {
+        Logger::warn("OTA", "OTA password is empty (define SMARTLOCK_OTA_PASSWORD)");
+    }
 
     ArduinoOTA.onStart(
         []()
@@ -36,11 +42,7 @@ OtaManager::begin(const String& hostname)
             {
                 type = "filesystem";
             }
-
             Logger::info("OTA", "Start updating %s", type.c_str());
-
-            // ✅ Stop critical services during OTA
-            // Example: mqtt.disconnect(), watchdog.disable()
         }
     );
 
@@ -50,9 +52,7 @@ OtaManager::begin(const String& hostname)
         [](unsigned int progress, unsigned int total)
         {
             static unsigned int lastPercent = 0;
-            unsigned int percent = (progress / (total / 100));
-
-            // Log every 10%
+            const unsigned int percent = (total == 0) ? 0 : (progress / (total / 100));
             if (percent >= lastPercent + 10)
             {
                 Logger::info("OTA", "Progress: %u%%", percent);
@@ -85,7 +85,7 @@ OtaManager::begin(const String& hostname)
                     break;
             }
 
-            Logger::error("OTA", "Error[%u]: %s", error, errorStr);
+            Logger::error("OTA", "Error[%u]: %s", (unsigned)error, errorStr);
         }
     );
 
@@ -105,7 +105,6 @@ OtaManager::loop()
 bool
 OtaManager::isUpdateInProgress()
 {
-    // Check if OTA is currently running
     return ArduinoOTA.getCommand() != 0;
 }
 
@@ -118,19 +117,16 @@ OtaManager::verifyFirmware()
     {
         Logger::info(
             "OTA", "Running partition: %s at 0x%x (size: %d bytes)", running->label,
-            running->address, running->size
+            (unsigned)running->address, (int)running->size
         );
     }
 
-    // Check if this is first boot after OTA
     esp_ota_img_states_t ota_state;
-    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK)
+    if (running && esp_ota_get_state_partition(running, &ota_state) == ESP_OK)
     {
         if (ota_state == ESP_OTA_IMG_PENDING_VERIFY)
         {
             Logger::info("OTA", "Validating new firmware...");
-
-            // Mark as valid after successful boot
             if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK)
             {
                 Logger::info("OTA", "Firmware validated successfully");

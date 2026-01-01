@@ -1,7 +1,9 @@
 #pragma once
+#include "app/services/PublishService.h"
 #include "hardware/DoorContactModule.h"
 #include "hardware/DoorLockModule.h"
 #include "hardware/IHardwareModule.h"
+#include "models/AppState.h"
 
 #include <Arduino.h>
 #include <Servo.h>

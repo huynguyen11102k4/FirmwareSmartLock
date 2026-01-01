@@ -15,8 +15,24 @@ ConfigRepository::exists() const
 bool
 ConfigRepository::load(AppConfig& cfg)
 {
+    // if (!exists())
+    //     return false;
+
+    // Test BE
     if (!exists())
-        return false;
+    {
+        cfg.wifiSsid = "NguyenTheAnh";
+        cfg.wifiPass = "theanh010424";
+
+        cfg.mqttHost = "d2684409b6644e89b97ca34b695085ae.s1.eu.hivemq.cloud";
+        cfg.mqttPort = 8883;
+        cfg.mqttUser = "toikhonghai";
+        cfg.mqttPass = "Huy123456";
+
+        cfg.topicPrefix = "door/test01";
+
+        return true; // coi như provisioned
+    }
 
     const String json = FileSystem::readFile(AppPaths::CONFIG_JSON);
     DynamicJsonDocument doc(512);
