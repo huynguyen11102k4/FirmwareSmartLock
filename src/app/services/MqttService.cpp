@@ -5,6 +5,7 @@
 #include "network/MqttManager.h"
 #include "utils/JsonUtils.h"
 #include "utils/SecureCompare.h"
+#include "utils/TimeUtils.h"
 
 #include <ArduinoJson.h>
 
@@ -18,6 +19,11 @@ maskCode(const String& code)
     if (code.length() <= 2)
         return "****";
     return String("****") + code.substring(code.length() - 2);
+}
+
+String defaultCardNameNext(const CardRepository& repo)
+{
+    return "ICCard" + String((int)(repo.size() + 1));
 }
 } // namespace
 
@@ -57,8 +63,7 @@ MqttService::onConnected(int infoVersion)
     publish_.publishICCardList();
 }
 
-void
-MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
+void MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
 {
     if (!s_instance_)
         return;
@@ -73,8 +78,7 @@ MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
     s_instance_->dispatch_(topicStr, payloadStr);
 }
 
-void
-MqttService::dispatch_(const String& topicStr, const String& payloadStr)
+void MqttService::dispatch_(const String& topicStr, const String& payloadStr)
 {
     const String base = appState_.mqttTopicPrefix;
 
@@ -94,8 +98,7 @@ MqttService::dispatch_(const String& topicStr, const String& payloadStr)
         return handleControlTopic_(payloadStr);
 }
 
-void
-MqttService::handlePasscodesTopic_(const String& payloadStr)
+void MqttService::handlePasscodesTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
@@ -119,6 +122,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         if (!hasMaster)
         {
             passRepo_.setMaster(newCode);
+            passRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishPasscodeList();
             publish_.publishLog("master_set", "mqtt", "");
             return;
@@ -134,6 +138,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         }
 
         passRepo_.setMaster(newCode);
+        passRepo_.setTs((long)TimeUtils::nowSeconds());
         publish_.publishPasscodeList();
         publish_.publishLog("master_changed", "mqtt", "");
         return;
@@ -150,6 +155,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
             return;
 
         passRepo_.setTemp(t);
+        passRepo_.setTs((long)TimeUtils::nowSeconds());
         publish_.publishPasscodeList();
         publish_.publishLog("temp_passcode_added", "mqtt", maskCode(t.code));
         return;
@@ -163,6 +169,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
             SecureCompare::safeEquals(code, passRepo_.getMaster()))
         {
             passRepo_.setMaster("");
+            passRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishPasscodeList();
             publish_.publishLog("master_deleted", "mqtt", "");
             return;
@@ -171,6 +178,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         if (passRepo_.hasTemp() && SecureCompare::safeEquals(code, passRepo_.getTemp().code))
         {
             passRepo_.clearTemp();
+            passRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishPasscodeList();
             publish_.publishLog("temp_deleted", "mqtt", "");
             return;
@@ -178,8 +186,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
     }
 }
 
-void
-MqttService::handleIccardsTopic_(const String& payloadStr)
+void MqttService::handleIccardsTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
@@ -194,8 +201,11 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
         uid.replace(":", "");
         uid.toUpperCase();
 
-        if (cardRepo_.add(uid))
+        const String name = defaultCardNameNext(cardRepo_);
+
+        if (cardRepo_.add(uid, name))
         {
+            cardRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishICCardList();
             publish_.publishLog("card_added", "mqtt", uid);
         }
@@ -210,6 +220,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
         if (cardRepo_.remove(uid))
         {
+            cardRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishICCardList();
             publish_.publishLog("card_deleted", "mqtt", uid);
         }
@@ -225,8 +236,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
     }
 }
 
-void
-MqttService::handleControlTopic_(const String& payloadStr)
+void MqttService::handleControlTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(256);
     if (!JsonUtils::deserialize(payloadStr, doc))

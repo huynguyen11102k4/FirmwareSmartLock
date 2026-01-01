@@ -1,3 +1,5 @@
+// /firmware/app/services/RfidService.cpp
+
 #include "app/services/RfidService.h"
 
 #include "app/services/PublishService.h"
@@ -9,8 +11,17 @@
 #include "network/MqttManager.h"
 #include "storage/CardRepository.h"
 #include "utils/Logger.h"
+#include "utils/TimeUtils.h"
 
 #include <SPI.h>
+
+namespace
+{
+String defaultCardNameNext(const CardRepository& repo)
+{
+    return "ICCard" + String((int)(repo.size() + 1));
+}
+} // namespace
 
 RfidService::RfidService(
     AppState& appState, CardRepository& cardRepo, PublishService& publish, DoorHardware& door,
@@ -21,8 +32,7 @@ RfidService::RfidService(
 {
 }
 
-void
-RfidService::begin()
+void RfidService::begin()
 {
     Logger::info("RFID", "=== RFID SERVICE INIT ===");
 
@@ -46,15 +56,13 @@ RfidService::begin()
     Logger::info("RFID", "=========================");
 }
 
-void
-RfidService::cleanupPcd_()
+void RfidService::cleanupPcd_()
 {
     mfrc522_.PICC_HaltA();
     mfrc522_.PCD_StopCrypto1();
 }
 
-String
-RfidService::getUID_()
+String RfidService::getUID_()
 {
     String uid;
     uid.reserve(2 * mfrc522_.uid.size);
@@ -70,8 +78,7 @@ RfidService::getUID_()
     return uid;
 }
 
-bool
-RfidService::detectCollision_()
+bool RfidService::detectCollision_()
 {
     byte bufferATQA[2];
     byte bufferSize = sizeof(bufferATQA);
@@ -86,8 +93,7 @@ RfidService::detectCollision_()
     return false;
 }
 
-bool
-RfidService::isAnyCardPresent_()
+bool RfidService::isAnyCardPresent_()
 {
     byte atqa[2] = {0, 0};
     byte atqaSize = sizeof(atqa);
@@ -99,8 +105,7 @@ RfidService::isAnyCardPresent_()
     return present;
 }
 
-bool
-RfidService::tryReadUidOnce_(String& outUid)
+bool RfidService::tryReadUidOnce_(String& outUid)
 {
     if (!mfrc522_.PICC_ReadCardSerial())
         return false;
@@ -109,8 +114,7 @@ RfidService::tryReadUidOnce_(String& outUid)
     return true;
 }
 
-void
-RfidService::loop()
+void RfidService::loop()
 {
     static uint32_t lastLoopMs = 0;
     if (millis() - lastLoopMs < 30)
@@ -211,8 +215,10 @@ RfidService::loop()
                 {
                     Logger::info("RFID", "Swipe-add confirmed: %s", uid.c_str());
 
-                    if (cardRepo_.add(uid))
+                    const String name = defaultCardNameNext(cardRepo_);
+                    if (cardRepo_.add(uid, name))
                     {
+                        cardRepo_.setTs((long)TimeUtils::nowSeconds());
                         Logger::info("RFID", "Card added to repository: %s", uid.c_str());
                         publish_.publishICCardList();
                     }
@@ -246,8 +252,12 @@ RfidService::loop()
             else if (cardRepo_.isEmpty())
             {
                 Logger::info("RFID", "Card repo empty -> auto-add card: %s", uid.c_str());
-                if (cardRepo_.add(uid))
+                const String name = defaultCardNameNext(cardRepo_);
+                if (cardRepo_.add(uid, name))
+                {
+                    cardRepo_.setTs((long)TimeUtils::nowSeconds());
                     publish_.publishICCardList();
+                }
             }
             else
             {
