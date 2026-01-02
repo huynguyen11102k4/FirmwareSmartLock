@@ -4,6 +4,7 @@
 #include "models/PinAuthState.h"
 #include "models/RuntimeFlags.h"
 #include "models/SwipeAddState.h"
+#include "utils/DeviceIdentity.h"
 
 #include <Arduino.h>
 
@@ -11,7 +12,10 @@ struct AppState
 {
     String macAddress = "";
     String mqttTopicPrefix = "";
-    String defaultMqttTopicPrefix = "door";
+    String defaultMqttTopicPrefix = "";
+
+    String doorCode = "";
+    String doorName = "";
 
     SwipeAddState swipeAdd;
     PinAuthState pinAuth;
@@ -24,12 +28,11 @@ struct AppState
     {
         macAddress = mac;
 
-        String mac2 = mac;
-        mac2.replace(":", "");
-        mac2.toLowerCase();
-
-        defaultMqttTopicPrefix = "door/" + mac2;
+        defaultMqttTopicPrefix = DeviceIdentity::makeTopicPrefix(mac);
         mqttTopicPrefix = defaultMqttTopicPrefix;
+
+        doorCode = DeviceIdentity::makeDoorCode(mac);
+        doorName = DeviceIdentity::makeDefaultName(mac);
 
         swipeAdd.reset();
         pinAuth.reset();

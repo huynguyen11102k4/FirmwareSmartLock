@@ -21,7 +21,8 @@ maskCode(const String& code)
     return String("****") + code.substring(code.length() - 2);
 }
 
-String defaultCardNameNext(const CardRepository& repo)
+String
+defaultCardNameNext(const CardRepository& repo)
 {
     return "ICCard" + String((int)(repo.size() + 1));
 }
@@ -63,7 +64,8 @@ MqttService::onConnected(int infoVersion)
     publish_.publishICCardList();
 }
 
-void MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
+void
+MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
 {
     if (!s_instance_)
         return;
@@ -78,7 +80,8 @@ void MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
     s_instance_->dispatch_(topicStr, payloadStr);
 }
 
-void MqttService::dispatch_(const String& topicStr, const String& payloadStr)
+void
+MqttService::dispatch_(const String& topicStr, const String& payloadStr)
 {
     const String base = appState_.mqttTopicPrefix;
 
@@ -98,7 +101,8 @@ void MqttService::dispatch_(const String& topicStr, const String& payloadStr)
         return handleControlTopic_(payloadStr);
 }
 
-void MqttService::handlePasscodesTopic_(const String& payloadStr)
+void
+MqttService::handlePasscodesTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
@@ -186,7 +190,8 @@ void MqttService::handlePasscodesTopic_(const String& payloadStr)
     }
 }
 
-void MqttService::handleIccardsTopic_(const String& payloadStr)
+void
+MqttService::handleIccardsTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
@@ -236,7 +241,8 @@ void MqttService::handleIccardsTopic_(const String& payloadStr)
     }
 }
 
-void MqttService::handleControlTopic_(const String& payloadStr)
+void
+MqttService::handleControlTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(256);
     if (!JsonUtils::deserialize(payloadStr, doc))

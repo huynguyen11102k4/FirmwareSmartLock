@@ -10,14 +10,15 @@
 
 namespace
 {
-static String defaultCardNameByIndex(size_t idx)
+static String
+defaultCardNameByIndex(size_t idx)
 {
     String s("ICCard");
     s += String((uint32_t)(idx + 1));
     return s;
 }
 
-String 
+String
 defaultCardNameFromUid(const String& uid)
 {
     if (uid.isEmpty())
@@ -26,7 +27,8 @@ defaultCardNameFromUid(const String& uid)
     return "ICCard" + head;
 }
 
-bool isBlank(const String& s)
+bool
+isBlank(const String& s)
 {
     for (size_t i = 0; i < s.length(); i++)
     {
@@ -35,7 +37,7 @@ bool isBlank(const String& s)
     }
     return true;
 }
-}
+} // namespace
 
 PublishService::PublishService(
     AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo
@@ -44,7 +46,8 @@ PublishService::PublishService(
 {
 }
 
-void PublishService::publishState(const String& state, const String& reason)
+void
+PublishService::publishState(const String& state, const String& reason)
 {
     if (!MqttManager::connected())
         return;
@@ -58,7 +61,8 @@ void PublishService::publishState(const String& state, const String& reason)
     MqttManager::publish(Topics::state(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true);
 }
 
-void PublishService::publishLog(const String& ev, const String& method, const String& detail)
+void
+PublishService::publishLog(const String& ev, const String& method, const String& detail)
 {
     if (!MqttManager::connected())
         return;
@@ -73,7 +77,8 @@ void PublishService::publishLog(const String& ev, const String& method, const St
     MqttManager::publish(Topics::log(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true);
 }
 
-void PublishService::publishBattery(int percent)
+void
+PublishService::publishBattery(int percent)
 {
     if (!MqttManager::connected())
         return;
@@ -85,7 +90,8 @@ void PublishService::publishBattery(int percent)
     MqttManager::publish(Topics::battery(appState_.mqttTopicPrefix), JsonUtils::serialize(doc));
 }
 
-void PublishService::publishPasscodeList()
+void
+PublishService::publishPasscodeList()
 {
     if (!MqttManager::connected())
         return;
@@ -100,9 +106,9 @@ void PublishService::publishPasscodeList()
     DynamicJsonDocument doc(est > 4096 ? 4096 : est);
 
     JsonObject root = doc.to<JsonObject>();
-    root["ts"] = ts;
+    root[AppJsonKeys::TS] = ts;
 
-    JsonArray items = root.createNestedArray("items");
+    JsonArray items = root.createNestedArray(AppJsonKeys::PASSCODES);
 
     const String master = passRepo_.getMaster();
     if (!isBlank(master))
@@ -150,7 +156,8 @@ void PublishService::publishPasscodeList()
     );
 }
 
-void PublishService::publishICCardList()
+void
+PublishService::publishICCardList()
 {
     if (!MqttManager::connected())
         return;
@@ -162,9 +169,9 @@ void PublishService::publishICCardList()
     DynamicJsonDocument doc(est > 4096 ? 4096 : est);
 
     JsonObject root = doc.to<JsonObject>();
-    root["ts"] = ts;
+    root[AppJsonKeys::TS] = ts;
 
-    JsonArray items = root.createNestedArray("items");
+    JsonArray items = root.createNestedArray(AppJsonKeys::CARDS);
 
     for (size_t i = 0; i < cards.size(); i++)
     {
@@ -186,7 +193,8 @@ void PublishService::publishICCardList()
     );
 }
 
-void PublishService::publishInfo(int batteryPercent, int version)
+void
+PublishService::publishInfo(int batteryPercent, int version)
 {
     if (!MqttManager::connected())
         return;

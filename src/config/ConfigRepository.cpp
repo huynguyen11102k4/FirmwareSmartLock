@@ -12,6 +12,15 @@ ConfigRepository::exists() const
     return FileSystem::exists(AppPaths::CONFIG_JSON);
 }
 
+static void
+fillMqttDefaults(AppConfig& cfg)
+{
+    cfg.mqttHost = MqttDefaults::HOST;
+    cfg.mqttPort = MqttDefaults::PORT;
+    cfg.mqttUser = MqttDefaults::USER;
+    cfg.mqttPass = MqttDefaults::PASS;
+}
+
 bool
 ConfigRepository::load(AppConfig& cfg)
 {
@@ -21,17 +30,14 @@ ConfigRepository::load(AppConfig& cfg)
     // Test BE
     if (!exists())
     {
+        cfg.clear();
         cfg.wifiSsid = "NguyenTheAnh";
         cfg.wifiPass = "theanh010424";
 
-        cfg.mqttHost = "d2684409b6644e89b97ca34b695085ae.s1.eu.hivemq.cloud";
-        cfg.mqttPort = 8883;
-        cfg.mqttUser = "toikhonghai";
-        cfg.mqttPass = "Huy123456";
+        fillMqttDefaults(cfg);
 
-        cfg.topicPrefix = "door/test01";
-
-        return true; // coi như provisioned
+        cfg.topicPrefix = "";
+        return true;
     }
 
     const String json = FileSystem::readFile(AppPaths::CONFIG_JSON);
@@ -43,14 +49,16 @@ ConfigRepository::load(AppConfig& cfg)
     AppConfig temp;
     temp.wifiSsid = doc[AppJsonKeys::WIFI_SSID] | "";
     temp.wifiPass = doc[AppJsonKeys::WIFI_PASS] | "";
+
     temp.mqttHost = doc[AppJsonKeys::MQTT_HOST] | "";
     temp.mqttPort = doc[AppJsonKeys::MQTT_PORT] | 8883;
     temp.mqttUser = doc[AppJsonKeys::MQTT_USER] | "";
     temp.mqttPass = doc[AppJsonKeys::MQTT_PASS] | "";
+
     temp.topicPrefix = doc[AppJsonKeys::TOPIC_PREFIX] | "";
 
-    if (!temp.isValid())
-        return false;
+    if (!temp.hasMqtt())
+        fillMqttDefaults(temp);
 
     cfg = temp;
     return true;

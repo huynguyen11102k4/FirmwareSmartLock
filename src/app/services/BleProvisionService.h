@@ -4,6 +4,7 @@
 #include "config/ConfigManager.h"
 #include "models/AppState.h"
 #include "utils/CommandQueue.h"
+#include "config/AppPaths.h"
 
 #include <Arduino.h>
 #include <BLE2902.h>
@@ -22,11 +23,14 @@ class BleProvisionService
     disableIfActive();
 
   private:
+    void
+    setBaseTopicFromConfigOrDefault_();
+
     bool
     parseBleConfigJsonToAppConfig_(const String& json, AppConfig& outCfg);
 
     void
-    setBaseTopicFromConfigOrDefault_();
+    notifyDeviceInfo_();
 
     class ConfigCallback final : public BLECharacteristicCallbacks
     {
@@ -34,9 +38,25 @@ class BleProvisionService
         explicit ConfigCallback(BleProvisionService& svc) : svc_(svc)
         {
         }
-
         void
         onWrite(BLECharacteristic* c) override;
+
+      private:
+        BleProvisionService& svc_;
+    };
+
+    class ServerCallback final : public BLEServerCallbacks
+    {
+      public:
+        explicit ServerCallback(BleProvisionService& svc) : svc_(svc)
+        {
+        }
+
+        void
+        onConnect(BLEServer*) override;
+
+        void
+        onDisconnect(BLEServer*) override;
 
       private:
         BleProvisionService& svc_;
@@ -46,6 +66,7 @@ class BleProvisionService
     ConfigManager& cfgMgr_;
     CommandQueue& cmdQueue_;
 
+    BLEServer* serverBle_{nullptr};
     BLECharacteristic* pConfig_{nullptr};
     BLECharacteristic* pNotify_{nullptr};
 };

@@ -16,7 +16,7 @@ ConfigManager::save()
 bool
 ConfigManager::isProvisioned() const
 {
-    return config.isValid();
+    return config.isProvisionedWifiOnly();
 }
 
 const AppConfig&
@@ -28,9 +28,11 @@ ConfigManager::get() const
 bool
 ConfigManager::updateFromBle(const AppConfig& cfg)
 {
-    if (!cfg.isValid())
+    if (!cfg.hasWifi())
         return false;
 
-    config = cfg;
+    config.wifiSsid = cfg.wifiSsid;
+    config.wifiPass = cfg.wifiPass;
+
     return repo.save(config);
 }

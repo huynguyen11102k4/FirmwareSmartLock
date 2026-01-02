@@ -1,5 +1,6 @@
 #pragma once
 #include "config/AppConfig.h"
+#include "config/MqttDefaults.h"
 
 class ConfigRepository
 {

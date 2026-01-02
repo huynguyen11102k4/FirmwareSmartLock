@@ -1,6 +1,5 @@
 #include "app/services/BleProvisionService.h"
 
-#include "config/AppPaths.h"
 #include "models/Command.h"
 #include "utils/JsonUtils.h"
 
@@ -36,41 +35,53 @@ BleProvisionService::setBaseTopicFromConfigOrDefault_()
 bool
 BleProvisionService::parseBleConfigJsonToAppConfig_(const String& json, AppConfig& outCfg)
 {
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(json, doc))
         return false;
 
-    outCfg.clear();
+    outCfg.clear(AppConfig::ClearMode::WIFI_ONLY);
 
     outCfg.wifiSsid = doc[AppJsonKeys::WIFI_SSID] | "";
     outCfg.wifiPass = doc[AppJsonKeys::WIFI_PASS] | "";
 
-    String host = doc[AppJsonKeys::MQTT_HOST] | "";
-    int port = (int)(doc[AppJsonKeys::MQTT_PORT] | 8883);
-
-    if (host.isEmpty() && doc.containsKey("mqtt_broker"))
-    {
-        const String broker = doc["mqtt_broker"] | "";
-        const int colon = broker.indexOf(':');
-        if (colon != -1)
-        {
-            host = broker.substring(0, colon);
-            port = broker.substring(colon + 1).toInt();
-        }
-        else
-        {
-            host = broker;
-        }
-    }
-
-    outCfg.mqttHost = host;
-    outCfg.mqttPort = (port > 0 ? port : 8883);
-
-    outCfg.mqttUser = doc[AppJsonKeys::MQTT_USER] | "";
-    outCfg.mqttPass = doc[AppJsonKeys::MQTT_PASS] | "";
     outCfg.topicPrefix = doc[AppJsonKeys::TOPIC_PREFIX] | "";
 
-    return outCfg.isValid();
+    return outCfg.hasWifi();
+}
+
+void
+BleProvisionService::notifyDeviceInfo_()
+{
+    if (!pNotify_)
+        return;
+
+    DynamicJsonDocument doc(256);
+    doc["type"] = "device_info";
+    doc["macAddress"] = appState_.macAddress;
+    doc["doorCode"] = appState_.doorCode;      
+    doc["name"] = appState_.doorName;      
+    doc["mqttTopicPrefix"] = appState_.mqttTopicPrefix;
+
+    const String payload = JsonUtils::serialize(doc);
+    pNotify_->setValue(payload.c_str());
+    pNotify_->notify();
+}
+
+void
+BleProvisionService::ServerCallback::onConnect(BLEServer*)
+{
+    svc_.appState_.deviceState.setBleState(true);
+    svc_.notifyDeviceInfo_();
+}
+
+void
+BleProvisionService::ServerCallback::onDisconnect(BLEServer*)
+{
+    svc_.appState_.deviceState.setBleState(false);
+
+    BLEAdvertising* adv = BLEDevice::getAdvertising();
+    if (adv)
+        adv->start();
 }
 
 void
@@ -79,15 +90,15 @@ BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
     const std::string value = c->getValue();
     const String json(value.c_str());
 
-    AppConfig newCfg;
-    if (!svc_.parseBleConfigJsonToAppConfig_(json, newCfg))
+    AppConfig wifiOnly;
+    if (!svc_.parseBleConfigJsonToAppConfig_(json, wifiOnly))
     {
-        svc_.pNotify_->setValue("error: invalid json/config");
+        svc_.pNotify_->setValue("error: invalid wifi json");
         svc_.pNotify_->notify();
         return;
     }
 
-    if (!svc_.cfgMgr_.updateFromBle(newCfg))
+    if (!svc_.cfgMgr_.updateFromBle(wifiOnly))
     {
         svc_.pNotify_->setValue("error: save failed");
         svc_.pNotify_->notify();
@@ -119,8 +130,10 @@ BleProvisionService::begin()
 
     BLEDevice::init(BLE_DEVICE_NAME);
 
-    BLEServer* serverBle = BLEDevice::createServer();
-    BLEService* svc = serverBle->createService(BLE_SERVICE_UUID);
+    serverBle_ = BLEDevice::createServer();
+    serverBle_->setCallbacks(new ServerCallback(*this));
+
+    BLEService* svc = serverBle_->createService(BLE_SERVICE_UUID);
 
     pConfig_ = svc->createCharacteristic(
         BLE_CHAR_CONFIG_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ

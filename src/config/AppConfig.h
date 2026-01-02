@@ -26,6 +26,12 @@ struct AppConfig
     }
 
     bool
+    isProvisionedWifiOnly() const
+    {
+        return hasWifi();
+    }
+
+    bool
     isValid() const
     {
         return hasWifi() && hasMqtt();

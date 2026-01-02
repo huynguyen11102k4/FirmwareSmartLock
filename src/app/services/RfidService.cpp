@@ -17,7 +17,8 @@
 
 namespace
 {
-String defaultCardNameNext(const CardRepository& repo)
+String
+defaultCardNameNext(const CardRepository& repo)
 {
     return "ICCard" + String((int)(repo.size() + 1));
 }
@@ -32,7 +33,8 @@ RfidService::RfidService(
 {
 }
 
-void RfidService::begin()
+void
+RfidService::begin()
 {
     Logger::info("RFID", "=== RFID SERVICE INIT ===");
 
@@ -56,13 +58,15 @@ void RfidService::begin()
     Logger::info("RFID", "=========================");
 }
 
-void RfidService::cleanupPcd_()
+void
+RfidService::cleanupPcd_()
 {
     mfrc522_.PICC_HaltA();
     mfrc522_.PCD_StopCrypto1();
 }
 
-String RfidService::getUID_()
+String
+RfidService::getUID_()
 {
     String uid;
     uid.reserve(2 * mfrc522_.uid.size);
@@ -78,7 +82,8 @@ String RfidService::getUID_()
     return uid;
 }
 
-bool RfidService::detectCollision_()
+bool
+RfidService::detectCollision_()
 {
     byte bufferATQA[2];
     byte bufferSize = sizeof(bufferATQA);
@@ -93,7 +98,8 @@ bool RfidService::detectCollision_()
     return false;
 }
 
-bool RfidService::isAnyCardPresent_()
+bool
+RfidService::isAnyCardPresent_()
 {
     byte atqa[2] = {0, 0};
     byte atqaSize = sizeof(atqa);
@@ -105,7 +111,8 @@ bool RfidService::isAnyCardPresent_()
     return present;
 }
 
-bool RfidService::tryReadUidOnce_(String& outUid)
+bool
+RfidService::tryReadUidOnce_(String& outUid)
 {
     if (!mfrc522_.PICC_ReadCardSerial())
         return false;
@@ -114,7 +121,8 @@ bool RfidService::tryReadUidOnce_(String& outUid)
     return true;
 }
 
-void RfidService::loop()
+void
+RfidService::loop()
 {
     static uint32_t lastLoopMs = 0;
     if (millis() - lastLoopMs < 30)

@@ -2,9 +2,8 @@
 #include "config/AppPaths.h"
 
 #include <Arduino.h>
-#include <vector>
-
 #include <ArduinoJson.h>
+#include <vector>
 
 struct CardItem
 {

@@ -6,21 +6,25 @@
 #include <ArduinoJson.h>
 namespace
 {
-    constexpr size_t kMinCap = 1024;
-    constexpr size_t kMaxCap = 32768;
+constexpr size_t kMinCap = 1024;
+constexpr size_t kMaxCap = 32768;
 
-    bool isUidValid(const String& uid)
-    {
-        return uid.length() > 0;
-    }
+bool
+isUidValid(const String& uid)
+{
+    return uid.length() > 0;
 }
+} // namespace
 
-size_t CardRepository::calcDocCapacity(const String& json)
+size_t
+CardRepository::calcDocCapacity(const String& json)
 {
     const size_t len = static_cast<size_t>(json.length());
     size_t cap = static_cast<size_t>(len * 13 / 10) + 1024;
-    if (cap < kMinCap) cap = kMinCap;
-    if (cap > kMaxCap) cap = kMaxCap;
+    if (cap < kMinCap)
+        cap = kMinCap;
+    if (cap > kMaxCap)
+        cap = kMaxCap;
     return cap;
 }
 
@@ -67,7 +71,7 @@ CardRepository::save()
     return saveInternal();
 }
 
-bool 
+bool
 CardRepository::saveInternal()
 {
     const size_t est = kMinCap + cards_.size() * 64;
@@ -96,12 +100,14 @@ CardRepository::exists(const String& uid) const
     return false;
 }
 
-bool CardRepository::add(const String& uid)
+bool
+CardRepository::add(const String& uid)
 {
     return add(uid, "");
 }
 
-bool CardRepository::add(const String& uid, const String& name)
+bool
+CardRepository::add(const String& uid, const String& name)
 {
     String clean = uid;
     clean.trim();
@@ -115,7 +121,8 @@ bool CardRepository::add(const String& uid, const String& name)
     return saveInternal();
 }
 
-bool CardRepository::updateName(const String& uid, const String& name)
+bool
+CardRepository::updateName(const String& uid, const String& name)
 {
     for (auto& c : cards_)
     {
@@ -142,7 +149,8 @@ CardRepository::remove(const String& uid)
     return false;
 }
 
-const std::vector<CardItem>& CardRepository::list() const
+const std::vector<CardItem>&
+CardRepository::list() const
 {
     return cards_;
 }
@@ -158,12 +166,14 @@ CardRepository::size() const
     return cards_.size();
 }
 
-long CardRepository::ts() const
+long
+CardRepository::ts() const
 {
     return ts_;
 }
 
-void CardRepository::setTs(long ts)
+void
+CardRepository::setTs(long ts)
 {
     ts_ = ts;
 }
