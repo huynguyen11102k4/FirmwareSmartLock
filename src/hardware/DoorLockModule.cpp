@@ -19,24 +19,16 @@ void
 DoorLockModule::onDoorContactChanged(bool isOpen)
 {
     isDoorContactOpen_ = isOpen;
-
-    Logger::info(TAG, "Door contact update: %s", isOpen ? "OPEN" : "CLOSED");
 }
 
 void
 DoorLockModule::begin(AppContext&)
 {
-    Logger::info(TAG, "Initializing DoorLockModule");
-
     pinMode(ledPin_, OUTPUT);
     digitalWrite(ledPin_, LOW);
 
     servo_.attach(servoPin_);
     servo_.write(LOCK_ANGLE);
-
-    Logger::info(
-        TAG, "Servo attached on pin %d, initial state LOCK (angle=%d)", servoPin_, LOCK_ANGLE
-    );
 }
 
 void
@@ -47,12 +39,12 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
     digitalWrite(ledPin_, HIGH);
     servo_.write(UNLOCK_ANGLE);
 
-    autoRelockAtMs_ = millis() + 5000;
+    autoRelockAtMs_ = millis() + 15000;
     autoRelockArmed_ = true;
 
-    Logger::info(TAG, "AutoRelock armed after 5000 ms");
+    Logger::info(TAG, "AutoRelock armed after 15s");
 
-    ctx.app.doorLock.unlock(5000); // giữ nguyên hoặc bỏ đều OK
+    ctx.app.doorLock.unlock(15000);
     ctx.app.deviceState.setDoorState(DoorState::UNLOCKED);
 
     ctx.publish.publishState(MqttDoorState::UNLOCKED, method);
@@ -67,12 +59,8 @@ DoorLockModule::lock(AppContext& ctx, const String& reason)
     servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);
 
-    Logger::info(TAG, "Servo moved to LOCK (angle=%d), LED OFF", LOCK_ANGLE);
-
     ctx.app.doorLock.lock();
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
-
-    Logger::debug(TAG, "DoorLockState updated: state=LOCKED");
 
     ctx.publish.publishState(MqttDoorState::LOCKED, reason);
     ctx.publish.publishLog(MqttDoorEvent::LOCK, reason, "");
@@ -81,11 +69,6 @@ DoorLockModule::lock(AppContext& ctx, const String& reason)
 void
 DoorLockModule::handleAutoRelock_(AppContext& ctx)
 {
-    Logger::debug(
-        TAG, "AutoRelock check | doorOpen=%d | state=%s | remaining=%ds", isDoorContactOpen_,
-        ctx.app.doorLock.getStateString(), ctx.app.doorLock.remainingUnlockSeconds()
-    );
-
     if (isDoorContactOpen_)
     {
         Logger::info(TAG, "AutoRelock SKIPPED: door is OPEN");
@@ -121,7 +104,7 @@ DoorLockModule::loop(AppContext& ctx)
     if ((int32_t)(millis() - autoRelockAtMs_) < 0)
         return;
 
-    Logger::info(TAG, "AutoRelock EXECUTE (fixed 5s)");
+    Logger::info(TAG, "AutoRelock EXECUTE");
 
     servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);

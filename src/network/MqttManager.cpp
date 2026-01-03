@@ -4,6 +4,8 @@
 #include "network/RetryPolicy.h"
 #include "utils/Logger.h"
 
+#include <ArduinoJson.h>
+
 static WiFiClientSecure secureClient;
 static PubSubClient mqtt(secureClient);
 
@@ -102,10 +104,48 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
         return false;
 
     const bool success = mqtt.publish(topic.c_str(), payload.c_str(), retained);
-    if (!success)
+
+    if (success)
     {
-        Logger::error("MQTT", "Publish failed to topic: %s", topic.c_str());
+        Logger::info(
+            "MQTT",
+            "Publish OK topic=%s size=%d retained=%d",
+            topic.c_str(),
+            payload.length(),
+            retained
+        );
+
+        StaticJsonDocument<1024> doc;
+        DeserializationError err = deserializeJson(doc, payload);
+
+        if (err)
+        {
+            Logger::warn(
+                "MQTT",
+                "Payload is not valid JSON (%s), raw:",
+                err.c_str()
+            );
+            Logger::info("MQTT", "%s", payload.c_str());
+        }
+        else
+        {
+            String pretty;
+            serializeJsonPretty(doc, pretty);
+            Logger::info("MQTT", "Payload:\n%s", pretty.c_str());
+        }
     }
+    else
+    {
+        Logger::error(
+            "MQTT",
+            "Publish FAILED topic=%s size=%d retained=%d state=%d",
+            topic.c_str(),
+            payload.length(),
+            retained,
+            mqtt.state()
+        );
+    }
+
     return success;
 }
 

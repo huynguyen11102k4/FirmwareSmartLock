@@ -1,5 +1,3 @@
-// /firmware/app/services/RfidService.cpp
-
 #include "app/services/RfidService.h"
 
 #include "app/services/PublishService.h"
@@ -36,27 +34,18 @@ RfidService::RfidService(
 void
 RfidService::begin()
 {
-    Logger::info("RFID", "=== RFID SERVICE INIT ===");
-
     SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 
-#if defined(ESP32)
-    SPI.setFrequency(1000000); // why: ổn định hơn với RC522 clone/EMI
-#endif
+    #if defined(ESP32)
+        SPI.setFrequency(1000000);
+    #endif
 
     mfrc522_.PCD_Init();
     delay(50);
 
     mfrc522_.PCD_AntennaOn();
     mfrc522_.PCD_SetAntennaGain(mfrc522_.RxGain_max);
-
-    Logger::info("RFID", "MFRC522 initialized");
-    Logger::info("RFID", "Stored cards count: %d", cardRepo_.size());
-    Logger::info("RFID", "Swipe-add mode: %s", appState_.runtimeFlags.swipeAddMode ? "ON" : "OFF");
-
     mfrc522_.PCD_DumpVersionToSerial();
-    Logger::info("RFID", "=========================");
-}
 
 void
 RfidService::cleanupPcd_()
@@ -129,20 +118,17 @@ RfidService::loop()
         return;
     lastLoopMs = millis();
 
-    // --- Swipe-add timeout ---
     if (appState_.runtimeFlags.swipeAddMode && appState_.swipeAdd.isTimeout())
     {
-        Logger::info("RFID", "Swipe-add timeout");
-
         appState_.runtimeFlags.swipeAddMode = false;
         appState_.swipeAdd.reset();
 
-        MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout");
+        MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout", false);
     }
 
-    constexpr uint32_t kRemoveGraceMs = 400;    // tolerate brief RF drop
-    constexpr uint32_t kAttemptIntervalMs = 30; // keep trying when present
-    constexpr uint16_t kReinitEveryFails = 25;  // cheap recovery on noisy setups
+    constexpr uint32_t kRemoveGraceMs = 400;
+    constexpr uint32_t kAttemptIntervalMs = 30;
+    constexpr uint16_t kReinitEveryFails = 25;
 
     // Post-success debounce (chỉ áp dụng khi đang Idle)
     const uint32_t debounceMs = lockConfig_.rfidDebounceMs;
@@ -206,7 +192,6 @@ RfidService::loop()
             lastReadMs_ = millis();
             Logger::info("RFID", "Card detected UID=%s", uid.c_str());
 
-            // --- Swipe add flow ---
             if (appState_.runtimeFlags.swipeAddMode)
             {
                 if (!appState_.swipeAdd.hasFirstSwipe())
@@ -214,10 +199,6 @@ RfidService::loop()
                     Logger::info("RFID", "Swipe-add first card: %s", uid.c_str());
 
                     appState_.swipeAdd.recordFirstSwipe(uid, lockConfig_.swipeAddTimeoutMs);
-
-                    MqttManager::publish(
-                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_first_detected"
-                    );
                 }
                 else if (appState_.swipeAdd.matchesFirstSwipe(uid))
                 {
@@ -235,7 +216,7 @@ RfidService::loop()
                     appState_.swipeAdd.reset();
 
                     MqttManager::publish(
-                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_success"
+                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_success", false
                     );
                 }
                 else
@@ -246,9 +227,14 @@ RfidService::loop()
                     appState_.swipeAdd.reset();
 
                     MqttManager::publish(
-                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_failed"
+                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_failed", false
                     );
                 }
+
+                cleanupPcd_();
+                scanState_ = ScanState::Held;
+                heldUid_ = uid;
+                return;
             }
 
             // --- Normal auth flow ---
@@ -257,16 +243,16 @@ RfidService::loop()
                 Logger::info("RFID", "Card AUTH SUCCESS: %s", uid.c_str());
                 door_.requestUnlock("card");
             }
-            else if (cardRepo_.isEmpty())
-            {
-                Logger::info("RFID", "Card repo empty -> auto-add card: %s", uid.c_str());
-                const String name = defaultCardNameNext(cardRepo_);
-                if (cardRepo_.add(uid, name))
-                {
-                    cardRepo_.setTs((long)TimeUtils::nowSeconds());
-                    publish_.publishICCardList();
-                }
-            }
+            // else if (cardRepo_.isEmpty())
+            // {
+            //     Logger::info("RFID", "Card repo empty => auto-add card: %s", uid.c_str());
+            //     const String name = defaultCardNameNext(cardRepo_);
+            //     if (cardRepo_.add(uid, name))
+            //     {
+            //         cardRepo_.setTs((long)TimeUtils::nowSeconds());
+            //         publish_.publishICCardList();
+            //     }
+            // }
             else
             {
                 Logger::info("RFID", "Card AUTH FAILED: %s", uid.c_str());

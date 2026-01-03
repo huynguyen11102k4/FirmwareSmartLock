@@ -43,7 +43,7 @@ KeypadService::begin()
 
     if (passRepo_.hasTemp())
     {
-        const PasscodeTemp t = passRepo_.getTemp();
+        const Passcode t = passRepo_.getTemp();
         Logger::info(
             "KEYPAD", "TEMP PIN loaded: '%s' (expire=%ld, now=%ld)", t.code.c_str(), t.expireAt,
             TimeUtils::nowSeconds()
@@ -62,8 +62,9 @@ KeypadService::checkPIN_(const String& pin)
 {
     Logger::info("KEYPAD", "Checking PIN: %s", pin.c_str());
 
-    const String master = passRepo_.getMaster();
+    const uint64_t now = TimeUtils::nowSeconds();
 
+    const String master = passRepo_.getMaster();
     if (master.length() >= (size_t)lockConfig_.minPinLength &&
         SecureCompare::safeEquals(pin, master))
     {
@@ -72,31 +73,19 @@ KeypadService::checkPIN_(const String& pin)
         return true;
     }
 
-    if (passRepo_.hasTemp())
+    if (passRepo_.validateAndConsume(pin, now))
     {
-        const PasscodeTemp t = passRepo_.getTemp();
+        Logger::info("KEYPAD", "UNLOCK by item PIN");
 
-        if (t.isExpired(TimeUtils::nowSeconds()))
-        {
-            Logger::info("KEYPAD", "Temp PIN expired: %s", t.code.c_str());
-            passRepo_.clearTemp();
-            publish_.publishPasscodeList();
-            return false;
-        }
-
-        if (SecureCompare::safeEquals(pin, t.code))
-        {
-            Logger::info("KEYPAD", "PIN matched TEMP: %s", pin.c_str());
-            Logger::info("KEYPAD", "UNLOCK by temp PIN");
-            passRepo_.clearTemp();
-            publish_.publishPasscodeList();
-            return true;
-        }
+        publish_.publishPasscodeList();
+        return true;
     }
 
-    Logger::info("KEYPAD", "PIN mismatch: %s", pin.c_str());
+    Logger::info("KEYPAD", "PIN mismatch or invalid: %s", pin.c_str());
     return false;
 }
+
+
 
 void
 KeypadService::loop()

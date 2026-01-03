@@ -5,96 +5,50 @@
 #include <Arduino.h>
 #include <vector>
 
-struct PasscodeItem
-{
-    String code;
-    String type; // "permanent" | "one_time" | "timed"
-    bool hasValidFrom{false};
-    bool hasValidTo{false};
-    long validFrom{0};
-    long validTo{0};
-
-    static PasscodeItem
-    fromJson(const JsonVariantConst& v)
-    {
-        PasscodeItem out;
-        out.code = v["code"] | "";
-        out.type = v["type"] | "";
-        if (!v["validFrom"].isNull())
-        {
-            out.hasValidFrom = true;
-            out.validFrom = v["validFrom"] | 0;
-        }
-        if (!v["validTo"].isNull())
-        {
-            out.hasValidTo = true;
-            out.validTo = v["validTo"] | 0;
-        }
-        return out;
-    }
-
-    void
-    toJson(JsonObject obj) const
-    {
-        obj["code"] = code;
-        obj["type"] = type;
-        if (hasValidFrom)
-            obj["validFrom"] = validFrom;
-        else
-            obj["validFrom"] = nullptr;
-        if (hasValidTo)
-            obj["validTo"] = validTo;
-        else
-            obj["validTo"] = nullptr;
-    }
-};
-
 class PasscodeRepository
 {
   public:
-    bool
-    load();
+    bool load();
 
-    String
-    getMaster() const;
+    /* ================= MASTER ================= */
+    String getMaster() const;
+    bool setMaster(const String& pass);
 
-    bool
-    setMaster(const String& pass);
+    /* ================= TEMP ================= */
+    bool hasTemp() const;
+    const Passcode& getTemp() const;
+    bool setTemp(const Passcode& temp);
+    bool clearTemp();
 
-    bool
-    hasTemp() const;
+    /* ================= STORED (one_time / timed) ================= */
+    const std::vector<Passcode>& listItems() const;
+    bool setItems(const std::vector<Passcode>& items, long ts);
+    bool addItem(const Passcode& p);
+    bool removeItemByCode(const String& code);
+    bool findItemByCode(
+        const String& code,
+        Passcode& out) const;
 
-    PasscodeTemp
-    getTemp() const;
+    bool validateAndConsume(
+        const String& code,
+        long now);
+    
 
-    bool
-    setTemp(const PasscodeTemp& temp);
-
-    bool
-    clearTemp();
-
-    const std::vector<PasscodeItem>&
-    listItems() const;
-    bool
-    setItems(const std::vector<PasscodeItem>& items, long ts);
-
-    long
-    ts() const;
-    void
-    setTs(long ts);
+    /* ================= META ================= */
+    long ts() const;
+    void setTs(long ts);
 
   private:
     String master_;
-    PasscodeTemp temp_;
+
+    Passcode temp_;
     bool hasTemp_{false};
 
-    std::vector<PasscodeItem> items_;
+    std::vector<Passcode> items_;
     long ts_{0};
 
     static constexpr const char* PATH = AppPaths::PASSCODES_JSON;
 
-    static size_t
-    calcDocCapacity(const String& json);
-    bool
-    saveAll();
+    static size_t calcDocCapacity(const String& json);
+    bool saveAll();
 };

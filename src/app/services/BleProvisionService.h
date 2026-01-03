@@ -1,10 +1,10 @@
 #pragma once
 #include "config/AppConfig.h"
+#include "config/AppPaths.h"
 #include "config/BleConfig.h"
 #include "config/ConfigManager.h"
 #include "models/AppState.h"
 #include "utils/CommandQueue.h"
-#include "config/AppPaths.h"
 
 #include <Arduino.h>
 #include <BLE2902.h>

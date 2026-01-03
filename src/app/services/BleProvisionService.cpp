@@ -58,8 +58,8 @@ BleProvisionService::notifyDeviceInfo_()
     DynamicJsonDocument doc(256);
     doc["type"] = "device_info";
     doc["macAddress"] = appState_.macAddress;
-    doc["doorCode"] = appState_.doorCode;      
-    doc["name"] = appState_.doorName;      
+    doc["doorCode"] = appState_.doorCode;
+    doc["name"] = appState_.doorName;
     doc["mqttTopicPrefix"] = appState_.mqttTopicPrefix;
 
     const String payload = JsonUtils::serialize(doc);

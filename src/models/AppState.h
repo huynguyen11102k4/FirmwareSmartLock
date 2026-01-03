@@ -26,13 +26,23 @@ struct AppState
     void
     init(const String& mac)
     {
-        macAddress = mac;
+        // macAddress = mac;
 
-        defaultMqttTopicPrefix = DeviceIdentity::makeTopicPrefix(mac);
+        // defaultMqttTopicPrefix = DeviceIdentity::makeTopicPrefix(mac);
+        // mqttTopicPrefix = defaultMqttTopicPrefix;
+
+        // doorCode = DeviceIdentity::makeDoorCode();
+        // doorName = DeviceIdentity::makeDefaultName(mac);
+
+        // Test values
+        (void)mac;
+
+        macAddress = "AA:BB:CC:DD:EE:FF";
+        defaultMqttTopicPrefix = "aabbccddeeff";
         mqttTopicPrefix = defaultMqttTopicPrefix;
 
-        doorCode = DeviceIdentity::makeDoorCode(mac);
-        doorName = DeviceIdentity::makeDefaultName(mac);
+        doorCode = "000000";
+        doorName = "Door-TEST";
 
         swipeAdd.reset();
         pinAuth.reset();

@@ -58,7 +58,7 @@ PublishService::publishState(const String& state, const String& reason)
     doc["method"] = reason;
     doc["ts"] = (long)TimeUtils::nowSeconds();
 
-    MqttManager::publish(Topics::state(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true);
+    MqttManager::publish(Topics::state(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false);
 }
 
 void
@@ -74,7 +74,7 @@ PublishService::publishLog(const String& ev, const String& method, const String&
         doc["detail"] = detail;
     doc["ts"] = (long)TimeUtils::nowSeconds();
 
-    MqttManager::publish(Topics::log(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true);
+    MqttManager::publish(Topics::log(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false);
 }
 
 void
@@ -87,7 +87,7 @@ PublishService::publishBattery(int percent)
     doc["battery"] = percent;
     doc["ts"] = (long)TimeUtils::nowSeconds();
 
-    MqttManager::publish(Topics::battery(appState_.mqttTopicPrefix), JsonUtils::serialize(doc));
+    MqttManager::publish(Topics::battery(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false);
 }
 
 void
@@ -100,9 +100,10 @@ PublishService::publishPasscodeList()
 
     const auto& stored = passRepo_.listItems();
     const bool hasMaster = !isBlank(passRepo_.getMaster());
-    const bool hasTemp = passRepo_.hasTemp();
 
-    const size_t est = 256 + (stored.size() + (hasMaster ? 1 : 0) + (hasTemp ? 1 : 0)) * 128;
+    const size_t est =
+        256 + (stored.size() + (hasMaster ? 1 : 0)) * 128;
+
     DynamicJsonDocument doc(est > 4096 ? 4096 : est);
 
     JsonObject root = doc.to<JsonObject>();
@@ -115,46 +116,28 @@ PublishService::publishPasscodeList()
     {
         JsonObject obj = items.createNestedObject();
         obj["code"] = master;
-        obj["type"] = "timed";
-        obj["validFrom"] = nullptr;
-        obj["validTo"] = nullptr;
-    }
-
-    if (passRepo_.hasTemp())
-    {
-        const PasscodeTemp t = passRepo_.getTemp();
-        JsonObject obj = items.createNestedObject();
-        obj["code"] = t.code;
-        obj["type"] = "timed";
-        obj["validFrom"] = nullptr;
-        obj["validTo"] = (long)t.expireAt;
+        obj["type"] = "master";
     }
 
     for (const auto& p : stored)
     {
-        const String typeForBe = (p.type == "one_time") ? "one_time" : "timed";
-
         JsonObject obj = items.createNestedObject();
-        obj["code"] = p.code;
-        obj["type"] = typeForBe;
-
-        if (p.hasValidFrom)
-            obj["validFrom"] = p.validFrom;
-        else
-            obj["validFrom"] = nullptr;
-
-        if (p.hasValidTo)
-            obj["validTo"] = p.validTo;
-        else
-            obj["validTo"] = nullptr;
+        obj["code"]        = p.code;
+        obj["type"]        = p.type;
+        obj["effectiveAt"] = (long)p.effectiveAt;
+        obj["expireAt"]    = (long)p.expireAt;
     }
 
     passRepo_.setTs(ts);
 
     MqttManager::publish(
-        Topics::passcodesList(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true
+        Topics::passcodesList(appState_.mqttTopicPrefix),
+        JsonUtils::serialize(doc),
+        false
     );
 }
+
+
 
 void
 PublishService::publishICCardList()
@@ -189,7 +172,7 @@ PublishService::publishICCardList()
     cardRepo_.setTs(ts);
 
     MqttManager::publish(
-        Topics::iccardsList(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), true
+        Topics::iccardsList(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false
     );
 }
 
@@ -205,5 +188,5 @@ PublishService::publishInfo(int batteryPercent, int version)
     info["battery"] = batteryPercent;
     info["version"] = version;
 
-    MqttManager::publish(Topics::info(appState_.mqttTopicPrefix), JsonUtils::serialize(info), true);
+    MqttManager::publish(Topics::info(appState_.mqttTopicPrefix), JsonUtils::serialize(info), false);
 }

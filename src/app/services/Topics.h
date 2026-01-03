@@ -60,13 +60,13 @@ battery(const String& base)
 inline String
 passcodesList(const String& base)
 {
-    return base + "/passcodes/list";
+    return base + "/passcodeslist";
 }
 
 inline String
 iccardsList(const String& base)
 {
-    return base + "/iccards/list";
+    return base + "/iccardslist";
 }
 
 inline String

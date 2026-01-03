@@ -2,30 +2,48 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-struct PasscodeTemp
+struct Passcode
 {
-    String code;
-    uint64_t expireAt;
+    String   code;
+    String   type;         // "one_time" | "timed"
+    uint64_t effectiveAt;  // unix seconds
+    uint64_t expireAt;     // 0 = không hết hạn
+
+    bool
+    isEffective(uint64_t now) const
+    {
+        return effectiveAt == 0 || now >= effectiveAt;
+    }
 
     bool
     isExpired(uint64_t now) const
     {
-        return now >= expireAt;
+        return expireAt > 0 && now >= expireAt;
+    }
+
+    bool
+    isValid(uint64_t now) const
+    {
+        return isEffective(now) && !isExpired(now);
     }
 
     void
     toJson(JsonObject obj) const
     {
-        obj["code"] = code;
-        obj["expireAt"] = expireAt;
+        obj["code"]        = code;
+        obj["type"]        = type;
+        obj["effectiveAt"] = effectiveAt;
+        obj["expireAt"]    = expireAt;
     }
 
-    static PasscodeTemp
-    fromJson(const JsonObject& obj)
+    static Passcode
+    fromJson(const JsonObjectConst& obj)
     {
-        PasscodeTemp p;
-        p.code = obj["code"] | "";
-        p.expireAt = obj["expireAt"] | 0;
+        Passcode p;
+        p.code        = obj["code"] | "";
+        p.type        = obj["type"] | "";
+        p.effectiveAt = (uint64_t)(obj["effectiveAt"] | 0);
+        p.expireAt    = (uint64_t)(obj["expireAt"] | 0);
         return p;
     }
 };

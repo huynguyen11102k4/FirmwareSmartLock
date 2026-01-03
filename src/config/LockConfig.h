@@ -8,7 +8,7 @@
 struct LockConfig
 {
     uint32_t unlockDurationMs = 5000;
-    uint32_t autoRelockDelayMs = 5000;
+    uint32_t autoRelockDelayMs = 15000;
 
     int maxFailedAttempts = 5;
     uint32_t lockoutDurationMs = 30000;

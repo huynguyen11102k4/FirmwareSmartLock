@@ -195,7 +195,7 @@ class AppImpl
         if (!passRepo_.hasTemp())
             return;
 
-        const PasscodeTemp t = passRepo_.getTemp();
+        const Passcode t = passRepo_.getTemp();
         if (t.isExpired(TimeUtils::nowSeconds()))
         {
             passRepo_.clearTemp();

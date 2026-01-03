@@ -6,21 +6,18 @@
 #include "utils/JsonUtils.h"
 #include "utils/SecureCompare.h"
 #include "utils/TimeUtils.h"
+#include "utils/Logger.h"
 
 #include <ArduinoJson.h>
 
+static const char* TAG_CB   = "MQTT_CB";
+static const char* TAG_DISP = "MQTT_DISP";
+static const char* TAG_PASS = "MQTT_PASS";
+static const char* TAG_CARD = "MQTT_CARD";
+static const char* TAG_CTRL = "MQTT_CTRL";
+
 namespace
 {
-String
-maskCode(const String& code)
-{
-    if (code.isEmpty())
-        return "";
-    if (code.length() <= 2)
-        return "****";
-    return String("****") + code.substring(code.length() - 2);
-}
-
 String
 defaultCardNameNext(const CardRepository& repo)
 {
@@ -34,8 +31,12 @@ MqttService::MqttService(
     AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
     PublishService& publish, const LockConfig& lockConfig, DoorHardware& door
 )
-    : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo), publish_(publish),
-      lockConfig_(lockConfig), door_(door)
+    : appState_(appState),
+      passRepo_(passRepo),
+      cardRepo_(cardRepo),
+      publish_(publish),
+      lockConfig_(lockConfig),
+      door_(door)
 {
 }
 
@@ -43,6 +44,7 @@ void
 MqttService::attachCallback()
 {
     s_instance_ = this;
+    Logger::info(TAG_CB, "attachCallback");
     MqttManager::setCallback(&MqttService::callbackThunk);
 }
 
@@ -51,14 +53,15 @@ MqttService::onConnected(int infoVersion)
 {
     const String base = appState_.mqttTopicPrefix;
 
+    Logger::info(TAG_DISP, "connected, subscribing topics");
+
     MqttManager::subscribe(Topics::passcodes(base), 1);
     MqttManager::subscribe(Topics::passcodesReq(base), 1);
     MqttManager::subscribe(Topics::iccards(base), 1);
     MqttManager::subscribe(Topics::iccardsReq(base), 1);
     MqttManager::subscribe(Topics::control(base), 1);
 
-    publish_.publishInfo(/*batteryPercent=*/0, infoVersion);
-
+    publish_.publishInfo(0, infoVersion);
     publish_.publishState("locked", "startup");
     publish_.publishPasscodeList();
     publish_.publishICCardList();
@@ -77,6 +80,14 @@ MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
     for (unsigned int i = 0; i < length; i++)
         payloadStr += (char)payload[i];
 
+    Logger::debug(
+        TAG_CB,
+        "RX topic=%s len=%u payload=%s",
+        topicStr.c_str(),
+        length,
+        payloadStr.c_str()
+    );
+
     s_instance_->dispatch_(topicStr, payloadStr);
 }
 
@@ -85,20 +96,37 @@ MqttService::dispatch_(const String& topicStr, const String& payloadStr)
 {
     const String base = appState_.mqttTopicPrefix;
 
+    Logger::debug(TAG_DISP, "dispatch topic=%s", topicStr.c_str());
+
     if (topicStr == Topics::passcodes(base))
+    {
         return handlePasscodesTopic_(payloadStr);
+    }
 
     if (topicStr == Topics::passcodesReq(base))
+    {
         return publish_.publishPasscodeList();
+    }
 
     if (topicStr == Topics::iccards(base))
+    {
         return handleIccardsTopic_(payloadStr);
+    }
 
     if (topicStr == Topics::iccardsReq(base))
+    {
         return publish_.publishICCardList();
+    }
 
     if (topicStr == Topics::control(base))
+    {
         return handleControlTopic_(payloadStr);
+    }
+    if (topicStr == Topics::info(base))
+    {
+        // ignore
+        return;
+    }
 }
 
 void
@@ -106,87 +134,87 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
-        return;
-
-    const String action = doc["action"] | "";
-    const String type = doc["type"] | "";
-
-    if (action == "add" && type == "permanent")
     {
-        const String newCode = doc["code"] | "";
-        const String oldCode = doc["old_code"] | "";
-
-        if (newCode.length() < (size_t)lockConfig_.minPinLength ||
-            newCode.length() > (size_t)lockConfig_.maxPinLength)
-            return;
-
-        const String current = passRepo_.getMaster();
-        const bool hasMaster = current.length() >= (size_t)lockConfig_.minPinLength;
-
-        if (!hasMaster)
-        {
-            passRepo_.setMaster(newCode);
-            passRepo_.setTs((long)TimeUtils::nowSeconds());
-            publish_.publishPasscodeList();
-            publish_.publishLog("master_set", "mqtt", "");
-            return;
-        }
-
-        if (oldCode.isEmpty() || !SecureCompare::safeEquals(oldCode, current))
-        {
-            MqttManager::publish(
-                Topics::passcodesError(appState_.mqttTopicPrefix),
-                "{\"error\":\"old_master_required\"}"
-            );
-            return;
-        }
-
-        passRepo_.setMaster(newCode);
-        passRepo_.setTs((long)TimeUtils::nowSeconds());
-        publish_.publishPasscodeList();
-        publish_.publishLog("master_changed", "mqtt", "");
+        publish_.publishLog("handle_payload_failed", "mqtt", "JSON parse failed");
         return;
     }
 
-    if (action == "add" && type == "temp")
+    const String action = doc["action"] | "";
+    const String type   = doc["type"] | "";
+
+    const uint64_t now = TimeUtils::nowSeconds();
+
+    if (action == "add" && type == "master")
     {
-        PasscodeTemp t;
-        t.code = doc["code"] | "";
-        t.expireAt = (uint64_t)(doc["expireAt"] | 0);
+        const String newCode = doc["code"] | "";
 
-        if (t.code.length() < (size_t)lockConfig_.minPinLength ||
-            t.code.length() > (size_t)lockConfig_.maxPinLength)
-            return;
+        passRepo_.setMaster(newCode);
+        passRepo_.setTs((long)now);
 
-        passRepo_.setTemp(t);
-        passRepo_.setTs((long)TimeUtils::nowSeconds());
         publish_.publishPasscodeList();
-        publish_.publishLog("temp_passcode_added", "mqtt", maskCode(t.code));
+        publish_.publishLog("master_set", "mqtt", newCode);
+        return;
+    }
+
+    if (action == "add" &&
+        (type == "one_time" || type == "timed"))
+    {
+        Passcode t;
+        t.code = doc["code"] | "";
+        t.type = type;
+
+        const uint64_t effectiveAt =
+            (uint64_t)(doc["effectiveAt"] | 0);
+        const uint64_t expireAt =
+            (uint64_t)(doc["expireAt"] | 0);
+
+        const uint64_t ts =
+            (uint64_t)(doc["ts"] | now);
+
+        if (effectiveAt > 0 && now < effectiveAt)
+        {
+            publish_.publishLog("add_passcode_failed", "mqtt", "passcode not effective yet");
+            return;
+        }
+
+        if (expireAt > 0 && now >= expireAt)
+        {
+            publish_.publishLog("add_passcode_failed", "mqtt", "passcode already expired");
+            return;
+        }
+
+        passRepo_.addItem(t);
+        passRepo_.setTs((long)ts);
+
+        publish_.publishPasscodeList();
+        publish_.publishLog("add_passcode_success", "mqtt", "add passcode success");
         return;
     }
 
     if (action == "delete")
     {
         const String code = doc["code"] | "";
+        const String type = doc["type"] | ""; // one_time | timed
 
-        if (passRepo_.getMaster().length() >= (size_t)lockConfig_.minPinLength &&
-            SecureCompare::safeEquals(code, passRepo_.getMaster()))
+        passRepo_.clearTemp();
+
+        if (type == "one_time" || type == "timed")
         {
-            passRepo_.setMaster("");
-            passRepo_.setTs((long)TimeUtils::nowSeconds());
-            publish_.publishPasscodeList();
-            publish_.publishLog("master_deleted", "mqtt", "");
+            if (passRepo_.removeItemByCode(code))
+            {
+                passRepo_.setTs((long)now);
+
+                publish_.publishPasscodeList();
+                publish_.publishLog("delete_passcode_success", "mqtt", "delete passcode success");
+                return;
+            }
+
+            publish_.publishLog("delete_passcode_failed", "mqtt", "passcode not found");
             return;
         }
 
-        if (passRepo_.hasTemp() && SecureCompare::safeEquals(code, passRepo_.getTemp().code))
-        {
-            passRepo_.clearTemp();
-            passRepo_.setTs((long)TimeUtils::nowSeconds());
-            publish_.publishPasscodeList();
-            publish_.publishLog("temp_deleted", "mqtt", "");
-            return;
-        }
+        publish_.publishLog("delete_passcode_failed", "mqtt", "delete ignored: unsupported this type");
+        return;
     }
 }
 
@@ -195,10 +223,14 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(512);
     if (!JsonUtils::deserialize(payloadStr, doc))
+    {
+        publish_.publishLog("handle_card_failed", "mqtt", "JSON parse failed");
         return;
+    }
 
     const String action = doc["action"] | "";
-    const String id = doc["id"] | "";
+    const String id     = doc["uid"] | "";
+    const String name   = doc["name"] | "";
 
     if (action == "add" && !id.isEmpty())
     {
@@ -206,18 +238,28 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
         uid.replace(":", "");
         uid.toUpperCase();
 
-        const String name = defaultCardNameNext(cardRepo_);
+        String finalName = name;
+        if (finalName.isEmpty())
+        {
+            // auto name if empty
+            finalName = defaultCardNameNext(cardRepo_);
+        }
 
-        if (cardRepo_.add(uid, name))
+        if (cardRepo_.add(uid, finalName))
         {
             cardRepo_.setTs((long)TimeUtils::nowSeconds());
             publish_.publishICCardList();
             publish_.publishLog("card_added", "mqtt", uid);
         }
+        else
+        { 
+            publish_.publishLog("card_add_failed", "mqtt", "add card failed (maybe exists)");
+        }
         return;
     }
 
-    if (action == "delete" && !id.isEmpty())
+
+    if (action == "remove" && !id.isEmpty())
     {
         String uid = id;
         uid.replace(":", "");
@@ -236,7 +278,6 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
     {
         appState_.swipeAdd.start(lockConfig_.swipeAddTimeoutMs);
         appState_.runtimeFlags.swipeAddMode = true;
-        MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_started");
         return;
     }
 }
@@ -246,9 +287,13 @@ MqttService::handleControlTopic_(const String& payloadStr)
 {
     DynamicJsonDocument doc(256);
     if (!JsonUtils::deserialize(payloadStr, doc))
+    {
+        publish_.publishLog("handle_payload_failed", "mqtt", "JSON parse failed");
         return;
+    }
 
     const String action = doc["action"] | "";
+
     if (action == "unlock")
     {
         door_.requestUnlock("remote");

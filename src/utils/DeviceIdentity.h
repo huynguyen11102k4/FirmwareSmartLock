@@ -37,12 +37,17 @@ class DeviceIdentity
     }
 
     static String
-    makeDoorCode(const String& mac)
+    makeDoorCode()
     {
-        const String m = macNoColonUpper(mac);
-        const uint32_t crc = crc32_(reinterpret_cast<const uint8_t*>(m.c_str()), m.length());
-        return "D" + toBase36_(crc, /*minLen=*/8);
+        uint32_t r = esp_random();
+        uint32_t code = r % 1000000;
+
+        char buf[7];
+        snprintf(buf, sizeof(buf), "%06lu", code);
+
+        return String(buf);
     }
+
 
   private:
     static uint32_t
