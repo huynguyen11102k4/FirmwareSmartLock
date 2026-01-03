@@ -10,7 +10,7 @@
 // const char* WIFI_SSID     = "toikhonghai";
 // const char* WIFI_PASS     = "11102004";
 
-// const char* MQTT_HOST     = "d2684409b6644e89b97ca34b695085ae.s1.eu.hivemq.cloud"; 
+// const char* MQTT_HOST     = "d2684409b6644e89b97ca34b695085ae.s1.eu.hivemq.cloud";
 // const int   MQTT_PORT     = 8883;
 // const char* MQTT_USER     = "toikhonghai";
 // const char* MQTT_PASS     = "Huy123456";
@@ -46,7 +46,7 @@
 // void loop() {
 //   if (!mqtt.connected()) {
 //     Serial.println("\nConnecting to HiveMQ Cloud...");
-    
+
 //     bool ok = mqtt.connect("ESP32TestClient", MQTT_USER, MQTT_PASS);
 
 //     if (ok) {

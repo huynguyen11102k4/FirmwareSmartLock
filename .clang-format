@@ -1,0 +1,87 @@
+# =========================================================
+# Readability First - C# Mindset
+# =========================================================
+
+BasedOnStyle: LLVM
+
+# =========================================================
+# Indentation
+# =========================================================
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+
+# =========================================================
+# Line length
+# =========================================================
+ColumnLimit: 100
+
+# =========================================================
+# Braces (C# / Allman style)
+# =========================================================
+BreakBeforeBraces: Allman
+
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+
+# =========================================================
+# Control statements
+# =========================================================
+SpaceBeforeParens: ControlStatements
+IndentCaseLabels: true
+IndentCaseBlocks: false
+
+# =========================================================
+# Functions & declarations
+# =========================================================
+AlwaysBreakAfterReturnType: All
+AlwaysBreakTemplateDeclarations: Yes
+
+# =========================================================
+# Alignment (ưu tiên đọc, không ưu tiên thẳng hàng)
+# =========================================================
+AlignAfterOpenBracket: BlockIndent
+AlignOperands: false
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# =========================================================
+# Pointer & reference (dễ đọc cho C# dev)
+# =========================================================
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# =========================================================
+# Spacing
+# =========================================================
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceInEmptyParentheses: false
+SpaceBeforeAssignmentOperators: true
+
+# =========================================================
+# Switch / case
+# =========================================================
+BreakBeforeBinaryOperators: None
+
+# =========================================================
+# Includes
+# =========================================================
+SortIncludes: true
+IncludeBlocks: Regroup
+
+# =========================================================
+# Comments
+# =========================================================
+ReflowComments: true
+CommentPragmas: '^ IWYU pragma:'
+
+# =========================================================
+# Empty lines & misc
+# =========================================================
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
