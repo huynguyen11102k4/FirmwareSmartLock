@@ -48,7 +48,6 @@ class DeviceIdentity
         return String(buf);
     }
 
-
   private:
     static uint32_t
     crc32_(const uint8_t* data, size_t len)

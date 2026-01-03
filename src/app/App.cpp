@@ -21,7 +21,6 @@
 #include "storage/FileSystem.h"
 #include "storage/PasscodeRepository.h"
 #include "utils/CommandQueue.h"
-#include "utils/JsonPool.h"
 #include "utils/JsonUtils.h"
 #include "utils/Logger.h"
 #include "utils/TimeUtils.h"
@@ -44,7 +43,7 @@ class AppImpl
               /*usePullup=*/true
           ),
           cmdQueue_(20), mqtt_(appState_, passRepo_, cardRepo_, publish_, lockConfig_, door_),
-          ble_(appState_, cfgMgr_, cmdQueue_), http_(appState_, this, &AppImpl::batteryThunk_),
+          ble_(appState_, cfgMgr_, cmdQueue_), http_(appState_, nullptr, nullptr),
           keypad_(appState_, passRepo_, publish_, door_, lockConfig_),
           rfid_(appState_, cardRepo_, publish_, door_, lockConfig_)
     {
@@ -93,12 +92,10 @@ class AppImpl
         if (!hasConfig || !cfgMgr_.isProvisioned())
         {
             Logger::warn("APP", "Not provisioned -> BLE mode");
-            // ble_.begin();
         }
         else
         {
             Logger::info("APP", "Provisioned -> Network mode");
-            // ble_.disableIfActive();
 
             const String clientId = "ESP32DoorLock-" + appState_.macAddress;
             NetworkManager::begin(cfgMgr_.get(), clientId);
@@ -115,7 +112,6 @@ class AppImpl
         WatchdogManager::feed();
 
         processCommandQueue_();
-
         NetworkManager::loop();
 
         door_.loop(ctx_);
@@ -129,20 +125,6 @@ class AppImpl
         wasConnected_ = isConnected;
 
         http_.loop();
-
-        if (shouldPublishBattery_())
-        {
-            publish_.publishBattery(readBatteryPercent_());
-            lastBatteryPublishMs_ = millis();
-        }
-
-        if (shouldSync_())
-        {
-            publish_.publishPasscodeList();
-            publish_.publishICCardList();
-            lastSyncMs_ = millis();
-        }
-
         keypad_.loop();
         rfid_.loop();
 
@@ -153,35 +135,6 @@ class AppImpl
     }
 
   private:
-    static int
-    batteryThunk_(void* ctx)
-    {
-        return static_cast<AppImpl*>(ctx)->readBatteryPercent_();
-    }
-
-    int
-    readBatteryPercent_()
-    {
-        const int raw = analogRead(BATTERY_PIN);
-        const float v = (raw / 4095.0f) * 3.3f * 2.0f;
-
-        const float minV = lockConfig_.batteryMinVoltage;
-        const float maxV = lockConfig_.batteryMaxVoltage;
-
-        float percent = 0.0f;
-        if (maxV > minV)
-        {
-            percent = (v - minV) / (maxV - minV) * 100.0f;
-        }
-
-        if (percent < 0.0f)
-            percent = 0.0f;
-        if (percent > 100.0f)
-            percent = 100.0f;
-
-        return (int)percent;
-    }
-
     void
     setBaseTopicFromConfigOrDefault_()
     {
@@ -201,18 +154,6 @@ class AppImpl
             passRepo_.clearTemp();
             publish_.publishPasscodeList();
         }
-    }
-
-    bool
-    shouldPublishBattery_() const
-    {
-        return (uint32_t)(millis() - lastBatteryPublishMs_) >= lockConfig_.batteryPublishIntervalMs;
-    }
-
-    bool
-    shouldSync_() const
-    {
-        return (uint32_t)(millis() - lastSyncMs_) >= lockConfig_.syncIntervalMs;
     }
 
     void
@@ -285,7 +226,6 @@ class AppImpl
     AppContext ctx_;
 
     DoorHardware door_;
-
     CommandQueue cmdQueue_;
 
     MqttService mqtt_;
@@ -295,8 +235,6 @@ class AppImpl
     RfidService rfid_;
 
     bool wasConnected_{false};
-    uint32_t lastBatteryPublishMs_{0};
-    uint32_t lastSyncMs_{0};
 };
 
 static AppImpl g_app;

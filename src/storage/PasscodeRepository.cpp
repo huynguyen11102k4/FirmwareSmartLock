@@ -59,8 +59,7 @@ PasscodeRepository::load()
     if (doc.containsKey(AppJsonKeys::PASSCODES_TEMP) &&
         doc[AppJsonKeys::PASSCODES_TEMP].is<JsonObject>())
     {
-        JsonObject obj =
-            doc[AppJsonKeys::PASSCODES_TEMP].as<JsonObject>();
+        JsonObject obj = doc[AppJsonKeys::PASSCODES_TEMP].as<JsonObject>();
 
         temp_ = Passcode::fromJson(obj);
         hasTemp_ = isCodeValid(temp_.code);
@@ -69,8 +68,7 @@ PasscodeRepository::load()
     if (doc.containsKey(AppJsonKeys::TS))
         ts_ = doc[AppJsonKeys::TS] | 0;
 
-    if (doc.containsKey(AppJsonKeys::PASSCODES) &&
-        doc[AppJsonKeys::PASSCODES].is<JsonArray>())
+    if (doc.containsKey(AppJsonKeys::PASSCODES) && doc[AppJsonKeys::PASSCODES].is<JsonArray>())
     {
         JsonArray arr = doc[AppJsonKeys::PASSCODES].as<JsonArray>();
 
@@ -79,7 +77,7 @@ PasscodeRepository::load()
             if (!v.is<JsonObject>())
                 continue;
 
-            JsonObjectConst obj = v.as<JsonObjectConst>(); 
+            JsonObjectConst obj = v.as<JsonObjectConst>();
             Passcode p = Passcode::fromJson(obj);
 
             p.code.trim();
@@ -145,9 +143,7 @@ PasscodeRepository::listItems() const
 }
 
 bool
-PasscodeRepository::setItems(
-    const std::vector<Passcode>& items,
-    long ts)
+PasscodeRepository::setItems(const std::vector<Passcode>& items, long ts)
 {
     items_.clear();
     items_.reserve(items.size());
@@ -194,8 +190,7 @@ PasscodeRepository::removeItemByCode(const String& code)
 
     items_.erase(
         std::remove_if(
-            items_.begin(),
-            items_.end(),
+            items_.begin(), items_.end(),
             [&](const Passcode& p)
             {
                 if (p.code == code)
@@ -204,7 +199,8 @@ PasscodeRepository::removeItemByCode(const String& code)
                     return true;
                 }
                 return false;
-            }),
+            }
+        ),
         items_.end()
     );
 
@@ -215,9 +211,7 @@ PasscodeRepository::removeItemByCode(const String& code)
 }
 
 bool
-PasscodeRepository::findItemByCode(
-    const String& code,
-    Passcode& out) const
+PasscodeRepository::findItemByCode(const String& code, Passcode& out) const
 {
     for (const auto& p : items_)
     {
@@ -231,9 +225,7 @@ PasscodeRepository::findItemByCode(
 }
 
 bool
-PasscodeRepository::validateAndConsume(
-    const String& code,
-    long now)
+PasscodeRepository::validateAndConsume(const String& code, long now)
 {
     for (size_t i = 0; i < items_.size(); ++i)
     {
@@ -271,8 +263,6 @@ PasscodeRepository::validateAndConsume(
     return false;
 }
 
-
-
 long
 PasscodeRepository::ts() const
 {
@@ -297,13 +287,11 @@ PasscodeRepository::saveAll()
 
     if (hasTemp_)
     {
-        JsonObject t =
-            doc.createNestedObject(AppJsonKeys::PASSCODES_TEMP);
+        JsonObject t = doc.createNestedObject(AppJsonKeys::PASSCODES_TEMP);
         temp_.toJson(t);
     }
 
-    JsonArray arr =
-        doc.createNestedArray(AppJsonKeys::PASSCODES);
+    JsonArray arr = doc.createNestedArray(AppJsonKeys::PASSCODES);
 
     for (const auto& p : items_)
     {
@@ -311,8 +299,5 @@ PasscodeRepository::saveAll()
         p.toJson(o);
     }
 
-    return FileSystem::writeFileAtomic(
-        PATH,
-        JsonUtils::serialize(doc)
-    );
+    return FileSystem::writeFileAtomic(PATH, JsonUtils::serialize(doc));
 }

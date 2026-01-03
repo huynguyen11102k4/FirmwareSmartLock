@@ -58,6 +58,12 @@ battery(const String& base)
 }
 
 inline String
+batteryReq(const String& base)
+{
+    return base + "/battery/request";
+}
+
+inline String
 passcodesList(const String& base)
 {
     return base + "/passcodeslist";

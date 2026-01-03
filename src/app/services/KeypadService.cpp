@@ -85,8 +85,6 @@ KeypadService::checkPIN_(const String& pin)
     return false;
 }
 
-
-
 void
 KeypadService::loop()
 {

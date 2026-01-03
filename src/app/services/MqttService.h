@@ -46,4 +46,6 @@ class MqttService
     DoorHardware& door_;
 
     static MqttService* s_instance_;
+
+    uint32_t lastOnConnectedMs_ = 0;
 };

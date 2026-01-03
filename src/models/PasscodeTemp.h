@@ -4,10 +4,10 @@
 
 struct Passcode
 {
-    String   code;
-    String   type;         // "one_time" | "timed"
-    uint64_t effectiveAt;  // unix seconds
-    uint64_t expireAt;     // 0 = không hết hạn
+    String code;
+    String type;          // "one_time" | "timed"
+    uint64_t effectiveAt; // unix seconds
+    uint64_t expireAt;    // 0 = không hết hạn
 
     bool
     isEffective(uint64_t now) const
@@ -30,20 +30,20 @@ struct Passcode
     void
     toJson(JsonObject obj) const
     {
-        obj["code"]        = code;
-        obj["type"]        = type;
+        obj["code"] = code;
+        obj["type"] = type;
         obj["effectiveAt"] = effectiveAt;
-        obj["expireAt"]    = expireAt;
+        obj["expireAt"] = expireAt;
     }
 
     static Passcode
     fromJson(const JsonObjectConst& obj)
     {
         Passcode p;
-        p.code        = obj["code"] | "";
-        p.type        = obj["type"] | "";
+        p.code = obj["code"] | "";
+        p.type = obj["type"] | "";
         p.effectiveAt = (uint64_t)(obj["effectiveAt"] | 0);
-        p.expireAt    = (uint64_t)(obj["expireAt"] | 0);
+        p.expireAt = (uint64_t)(obj["expireAt"] | 0);
         return p;
     }
 };

@@ -8,35 +8,45 @@
 class PasscodeRepository
 {
   public:
-    bool load();
+    bool
+    load();
 
     /* ================= MASTER ================= */
-    String getMaster() const;
-    bool setMaster(const String& pass);
+    String
+    getMaster() const;
+    bool
+    setMaster(const String& pass);
 
     /* ================= TEMP ================= */
-    bool hasTemp() const;
-    const Passcode& getTemp() const;
-    bool setTemp(const Passcode& temp);
-    bool clearTemp();
+    bool
+    hasTemp() const;
+    const Passcode&
+    getTemp() const;
+    bool
+    setTemp(const Passcode& temp);
+    bool
+    clearTemp();
 
     /* ================= STORED (one_time / timed) ================= */
-    const std::vector<Passcode>& listItems() const;
-    bool setItems(const std::vector<Passcode>& items, long ts);
-    bool addItem(const Passcode& p);
-    bool removeItemByCode(const String& code);
-    bool findItemByCode(
-        const String& code,
-        Passcode& out) const;
+    const std::vector<Passcode>&
+    listItems() const;
+    bool
+    setItems(const std::vector<Passcode>& items, long ts);
+    bool
+    addItem(const Passcode& p);
+    bool
+    removeItemByCode(const String& code);
+    bool
+    findItemByCode(const String& code, Passcode& out) const;
 
-    bool validateAndConsume(
-        const String& code,
-        long now);
-    
+    bool
+    validateAndConsume(const String& code, long now);
 
     /* ================= META ================= */
-    long ts() const;
-    void setTs(long ts);
+    long
+    ts() const;
+    void
+    setTs(long ts);
 
   private:
     String master_;
@@ -49,6 +59,8 @@ class PasscodeRepository
 
     static constexpr const char* PATH = AppPaths::PASSCODES_JSON;
 
-    static size_t calcDocCapacity(const String& json);
-    bool saveAll();
+    static size_t
+    calcDocCapacity(const String& json);
+    bool
+    saveAll();
 };

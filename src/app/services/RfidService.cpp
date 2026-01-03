@@ -36,9 +36,9 @@ RfidService::begin()
 {
     SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 
-    #if defined(ESP32)
-        SPI.setFrequency(1000000);
-    #endif
+#if defined(ESP32)
+    SPI.setFrequency(1000000);
+#endif
 
     mfrc522_.PCD_Init();
     delay(50);
@@ -46,6 +46,7 @@ RfidService::begin()
     mfrc522_.PCD_AntennaOn();
     mfrc522_.PCD_SetAntennaGain(mfrc522_.RxGain_max);
     mfrc522_.PCD_DumpVersionToSerial();
+}
 
 void
 RfidService::cleanupPcd_()
@@ -123,7 +124,9 @@ RfidService::loop()
         appState_.runtimeFlags.swipeAddMode = false;
         appState_.swipeAdd.reset();
 
-        MqttManager::publish(Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout", false);
+        MqttManager::publish(
+            Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout", false
+        );
     }
 
     constexpr uint32_t kRemoveGraceMs = 400;

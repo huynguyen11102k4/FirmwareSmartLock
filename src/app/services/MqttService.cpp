@@ -4,13 +4,13 @@
 #include "models/PasscodeTemp.h"
 #include "network/MqttManager.h"
 #include "utils/JsonUtils.h"
+#include "utils/Logger.h"
 #include "utils/SecureCompare.h"
 #include "utils/TimeUtils.h"
-#include "utils/Logger.h"
 
 #include <ArduinoJson.h>
 
-static const char* TAG_CB   = "MQTT_CB";
+static const char* TAG_CB = "MQTT_CB";
 static const char* TAG_DISP = "MQTT_DISP";
 static const char* TAG_PASS = "MQTT_PASS";
 static const char* TAG_CARD = "MQTT_CARD";
@@ -31,12 +31,8 @@ MqttService::MqttService(
     AppState& appState, PasscodeRepository& passRepo, CardRepository& cardRepo,
     PublishService& publish, const LockConfig& lockConfig, DoorHardware& door
 )
-    : appState_(appState),
-      passRepo_(passRepo),
-      cardRepo_(cardRepo),
-      publish_(publish),
-      lockConfig_(lockConfig),
-      door_(door)
+    : appState_(appState), passRepo_(passRepo), cardRepo_(cardRepo), publish_(publish),
+      lockConfig_(lockConfig), door_(door)
 {
 }
 
@@ -55,11 +51,12 @@ MqttService::onConnected(int infoVersion)
 
     Logger::info(TAG_DISP, "connected, subscribing topics");
 
-    MqttManager::subscribe(Topics::passcodes(base), 1);
-    MqttManager::subscribe(Topics::passcodesReq(base), 1);
-    MqttManager::subscribe(Topics::iccards(base), 1);
-    MqttManager::subscribe(Topics::iccardsReq(base), 1);
-    MqttManager::subscribe(Topics::control(base), 1);
+    MqttManager::subscribe(Topics::passcodes(base), 0);
+    MqttManager::subscribe(Topics::passcodesReq(base), 0);
+    MqttManager::subscribe(Topics::iccards(base), 0);
+    MqttManager::subscribe(Topics::iccardsReq(base), 0);
+    MqttManager::subscribe(Topics::control(base), 0);
+    MqttManager::subscribe(Topics::batteryReq(base), 0);
 
     publish_.publishInfo(0, infoVersion);
     publish_.publishState("locked", "startup");
@@ -81,11 +78,7 @@ MqttService::callbackThunk(char* topic, byte* payload, unsigned int length)
         payloadStr += (char)payload[i];
 
     Logger::debug(
-        TAG_CB,
-        "RX topic=%s len=%u payload=%s",
-        topicStr.c_str(),
-        length,
-        payloadStr.c_str()
+        TAG_CB, "RX topic=%s len=%u payload=%s", topicStr.c_str(), length, payloadStr.c_str()
     );
 
     s_instance_->dispatch_(topicStr, payloadStr);
@@ -127,6 +120,11 @@ MqttService::dispatch_(const String& topicStr, const String& payloadStr)
         // ignore
         return;
     }
+    if (topicStr == Topics::batteryReq(base))
+    {
+        publish_.publishBattery(random(20, 100));
+        return;
+    }
 }
 
 void
@@ -140,7 +138,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
     }
 
     const String action = doc["action"] | "";
-    const String type   = doc["type"] | "";
+    const String type = doc["type"] | "";
 
     const uint64_t now = TimeUtils::nowSeconds();
 
@@ -156,20 +154,16 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         return;
     }
 
-    if (action == "add" &&
-        (type == "one_time" || type == "timed"))
+    if (action == "add" && (type == "one_time" || type == "timed"))
     {
         Passcode t;
         t.code = doc["code"] | "";
         t.type = type;
 
-        const uint64_t effectiveAt =
-            (uint64_t)(doc["effectiveAt"] | 0);
-        const uint64_t expireAt =
-            (uint64_t)(doc["expireAt"] | 0);
+        const uint64_t effectiveAt = (uint64_t)(doc["effectiveAt"] | 0);
+        const uint64_t expireAt = (uint64_t)(doc["expireAt"] | 0);
 
-        const uint64_t ts =
-            (uint64_t)(doc["ts"] | now);
+        const uint64_t ts = (uint64_t)(doc["ts"] | now);
 
         if (effectiveAt > 0 && now < effectiveAt)
         {
@@ -213,7 +207,9 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
             return;
         }
 
-        publish_.publishLog("delete_passcode_failed", "mqtt", "delete ignored: unsupported this type");
+        publish_.publishLog(
+            "delete_passcode_failed", "mqtt", "delete ignored: unsupported this type"
+        );
         return;
     }
 }
@@ -229,8 +225,8 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
     }
 
     const String action = doc["action"] | "";
-    const String id     = doc["uid"] | "";
-    const String name   = doc["name"] | "";
+    const String id = doc["uid"] | "";
+    const String name = doc["name"] | "";
 
     if (action == "add" && !id.isEmpty())
     {
@@ -252,12 +248,11 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
             publish_.publishLog("card_added", "mqtt", uid);
         }
         else
-        { 
+        {
             publish_.publishLog("card_add_failed", "mqtt", "add card failed (maybe exists)");
         }
         return;
     }
-
 
     if (action == "remove" && !id.isEmpty())
     {

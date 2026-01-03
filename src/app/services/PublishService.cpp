@@ -58,7 +58,9 @@ PublishService::publishState(const String& state, const String& reason)
     doc["method"] = reason;
     doc["ts"] = (long)TimeUtils::nowSeconds();
 
-    MqttManager::publish(Topics::state(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false);
+    MqttManager::publish(
+        Topics::state(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false
+    );
 }
 
 void
@@ -87,7 +89,9 @@ PublishService::publishBattery(int percent)
     doc["battery"] = percent;
     doc["ts"] = (long)TimeUtils::nowSeconds();
 
-    MqttManager::publish(Topics::battery(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false);
+    MqttManager::publish(
+        Topics::battery(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false
+    );
 }
 
 void
@@ -101,8 +105,7 @@ PublishService::publishPasscodeList()
     const auto& stored = passRepo_.listItems();
     const bool hasMaster = !isBlank(passRepo_.getMaster());
 
-    const size_t est =
-        256 + (stored.size() + (hasMaster ? 1 : 0)) * 128;
+    const size_t est = 256 + (stored.size() + (hasMaster ? 1 : 0)) * 128;
 
     DynamicJsonDocument doc(est > 4096 ? 4096 : est);
 
@@ -122,22 +125,18 @@ PublishService::publishPasscodeList()
     for (const auto& p : stored)
     {
         JsonObject obj = items.createNestedObject();
-        obj["code"]        = p.code;
-        obj["type"]        = p.type;
+        obj["code"] = p.code;
+        obj["type"] = p.type;
         obj["effectiveAt"] = (long)p.effectiveAt;
-        obj["expireAt"]    = (long)p.expireAt;
+        obj["expireAt"] = (long)p.expireAt;
     }
 
     passRepo_.setTs(ts);
 
     MqttManager::publish(
-        Topics::passcodesList(appState_.mqttTopicPrefix),
-        JsonUtils::serialize(doc),
-        false
+        Topics::passcodesList(appState_.mqttTopicPrefix), JsonUtils::serialize(doc), false
     );
 }
-
-
 
 void
 PublishService::publishICCardList()
@@ -188,5 +187,7 @@ PublishService::publishInfo(int batteryPercent, int version)
     info["battery"] = batteryPercent;
     info["version"] = version;
 
-    MqttManager::publish(Topics::info(appState_.mqttTopicPrefix), JsonUtils::serialize(info), false);
+    MqttManager::publish(
+        Topics::info(appState_.mqttTopicPrefix), JsonUtils::serialize(info), false
+    );
 }

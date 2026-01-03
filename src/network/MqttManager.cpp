@@ -108,10 +108,7 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
     if (success)
     {
         Logger::info(
-            "MQTT",
-            "Publish OK topic=%s size=%d retained=%d",
-            topic.c_str(),
-            payload.length(),
+            "MQTT", "Publish OK topic=%s size=%d retained=%d", topic.c_str(), payload.length(),
             retained
         );
 
@@ -120,11 +117,7 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
 
         if (err)
         {
-            Logger::warn(
-                "MQTT",
-                "Payload is not valid JSON (%s), raw:",
-                err.c_str()
-            );
+            Logger::warn("MQTT", "Payload is not valid JSON (%s), raw:", err.c_str());
             Logger::info("MQTT", "%s", payload.c_str());
         }
         else
@@ -137,12 +130,8 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
     else
     {
         Logger::error(
-            "MQTT",
-            "Publish FAILED topic=%s size=%d retained=%d state=%d",
-            topic.c_str(),
-            payload.length(),
-            retained,
-            mqtt.state()
+            "MQTT", "Publish FAILED topic=%s size=%d retained=%d state=%d", topic.c_str(),
+            payload.length(), retained, mqtt.state()
         );
     }
 
