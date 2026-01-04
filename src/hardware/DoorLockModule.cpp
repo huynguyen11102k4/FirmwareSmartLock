@@ -48,7 +48,7 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
     ctx.app.deviceState.setDoorState(DoorState::UNLOCKED);
 
     ctx.publish.publishState(MqttDoorState::UNLOCKED, method);
-    ctx.publish.publishLog(MqttDoorEvent::UNLOCK, method, "");
+    ctx.publish.publishLog(MqttDoorEvent::DOOR_UNLOCKED, method, "");
 }
 
 void
@@ -63,7 +63,7 @@ DoorLockModule::lock(AppContext& ctx, const String& reason)
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
 
     ctx.publish.publishState(MqttDoorState::LOCKED, reason);
-    ctx.publish.publishLog(MqttDoorEvent::LOCK, reason, "");
+    ctx.publish.publishLog(MqttDoorEvent::DOOR_LOCKED, reason, "");
 }
 
 void
@@ -92,7 +92,7 @@ DoorLockModule::handleAutoRelock_(AppContext& ctx)
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
 
     ctx.publish.publishState(MqttDoorState::LOCKED, MqttSource::AUTO);
-    ctx.publish.publishLog(MqttDoorEvent::LOCK, MqttSource::AUTO, "");
+    ctx.publish.publishLog(MqttDoorEvent::DOOR_LOCKED, MqttSource::AUTO, "");
 }
 
 void
@@ -115,5 +115,5 @@ DoorLockModule::loop(AppContext& ctx)
     ctx.app.deviceState.setDoorState(DoorState::LOCKED);
 
     ctx.publish.publishState(MqttDoorState::LOCKED, MqttSource::AUTO);
-    ctx.publish.publishLog(MqttDoorEvent::LOCK, MqttSource::AUTO, "");
+    ctx.publish.publishLog(MqttDoorEvent::DOOR_LOCKED, MqttSource::AUTO, "");
 }

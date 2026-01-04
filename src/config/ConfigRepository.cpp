@@ -19,24 +19,22 @@ fillMqttDefaults(AppConfig& cfg)
     cfg.mqttPort = MqttDefaults::PORT;
     cfg.mqttUser = MqttDefaults::USER;
     cfg.mqttPass = MqttDefaults::PASS;
+    
 }
 
 bool
 ConfigRepository::load(AppConfig& cfg)
 {
-    // if (!exists())
-    //     return false;
+    AppConfig temp;
+    temp.clear();
+    fillMqttDefaults(temp);
+    temp.topicPrefix = "";
 
-    // Test BE
     if (!exists())
     {
-        cfg.clear();
-        cfg.wifiSsid = "NguyenTheAnh";
-        cfg.wifiPass = "theanh010424";
-
-        fillMqttDefaults(cfg);
-
-        cfg.topicPrefix = "";
+        temp.wifiSsid = "NguyenTheAnh";
+        temp.wifiPass = "theanh010424";
+        cfg = temp;
         return true;
     }
 
@@ -44,25 +42,19 @@ ConfigRepository::load(AppConfig& cfg)
     DynamicJsonDocument doc(512);
 
     if (!JsonUtils::deserialize(json, doc))
-        return false;
+    {
+        cfg = temp;
+        return true;
+    }
 
-    AppConfig temp;
     temp.wifiSsid = doc[AppJsonKeys::WIFI_SSID] | "";
     temp.wifiPass = doc[AppJsonKeys::WIFI_PASS] | "";
-
-    temp.mqttHost = doc[AppJsonKeys::MQTT_HOST] | "";
-    temp.mqttPort = doc[AppJsonKeys::MQTT_PORT] | 8883;
-    temp.mqttUser = doc[AppJsonKeys::MQTT_USER] | "";
-    temp.mqttPass = doc[AppJsonKeys::MQTT_PASS] | "";
-
     temp.topicPrefix = doc[AppJsonKeys::TOPIC_PREFIX] | "";
-
-    if (!temp.hasMqtt())
-        fillMqttDefaults(temp);
 
     cfg = temp;
     return true;
 }
+
 
 bool
 ConfigRepository::save(const AppConfig& cfg)

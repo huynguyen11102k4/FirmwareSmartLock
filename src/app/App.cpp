@@ -92,6 +92,7 @@ class AppImpl
         if (!hasConfig || !cfgMgr_.isProvisioned())
         {
             Logger::warn("APP", "Not provisioned -> BLE mode");
+            ble_.begin();
         }
         else
         {
@@ -178,7 +179,6 @@ class AppImpl
                 const String clientId = "ESP32DoorLock-" + appState_.macAddress;
                 NetworkManager::begin(cfgMgr_.get(), clientId);
                 mqtt_.attachCallback();
-
                 Logger::info("APP", "APPLY_CONFIG ok -> Network begin");
             }
         }

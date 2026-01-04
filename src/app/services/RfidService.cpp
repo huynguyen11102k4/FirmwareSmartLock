@@ -244,7 +244,7 @@ RfidService::loop()
             if (cardRepo_.exists(uid))
             {
                 Logger::info("RFID", "Card AUTH SUCCESS: %s", uid.c_str());
-                door_.requestUnlock("card");
+                door_.requestUnlock("Card");
             }
             // else if (cardRepo_.isEmpty())
             // {
