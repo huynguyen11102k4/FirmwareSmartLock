@@ -36,7 +36,7 @@ MqttManager::setupClient()
     mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt.setKeepAlive(60);
     mqtt.setSocketTimeout(20);
-    mqtt.setBufferSize(4096);
+    mqtt.setBufferSize(2048);
 }
 
 void

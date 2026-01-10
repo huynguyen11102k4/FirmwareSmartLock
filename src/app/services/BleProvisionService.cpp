@@ -21,8 +21,22 @@ BleProvisionService::disableIfActive()
         return;
 
     appState_.runtimeFlags.bleActive = false;
+
+    if (serverBle_)
+    {
+        serverBle_->setCallbacks(nullptr);
+    }
+    if (pConfig_)
+    {
+        pConfig_->setCallbacks(nullptr);
+    }
+
     BLEDevice::deinit(true);
-    delay(300);
+    delay(500);
+
+    serverBle_ = nullptr;
+    pConfig_ = nullptr;
+    pNotify_ = nullptr;
 }
 
 bool

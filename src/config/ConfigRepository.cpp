@@ -32,8 +32,6 @@ ConfigRepository::load(AppConfig& cfg)
 
     if (!exists())
     {
-        temp.wifiSsid = "NguyenTheAnh";
-        temp.wifiPass = "theanh010424";
         cfg = temp;
         return true;
     }

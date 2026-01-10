@@ -1,7 +1,6 @@
 #include "app/App.h"
 
 #include "app/services/BleProvisionService.h"
-#include "app/services/HttpService.h"
 #include "app/services/KeypadService.h"
 #include "app/services/MqttService.h"
 #include "app/services/PublishService.h"
@@ -43,7 +42,7 @@ class AppImpl
               /*usePullup=*/true
           ),
           cmdQueue_(20), mqtt_(appState_, passRepo_, cardRepo_, publish_, lockConfig_, door_),
-          ble_(appState_, cfgMgr_, cmdQueue_), http_(appState_, nullptr, nullptr),
+          ble_(appState_, cfgMgr_, cmdQueue_),
           keypad_(appState_, passRepo_, publish_, door_, lockConfig_),
           rfid_(appState_, cardRepo_, publish_, door_, lockConfig_)
     {
@@ -87,7 +86,6 @@ class AppImpl
 
         rfid_.begin();
         keypad_.begin();
-        http_.begin();
 
         if (!hasConfig || !cfgMgr_.isProvisioned())
         {
@@ -121,11 +119,14 @@ class AppImpl
         if (isConnected && !wasConnected_)
         {
             ble_.disableIfActive();
+
+            delay(1000);
+            ESP.restart();
+
             mqtt_.onConnected(/*infoVersion=*/3);
         }
         wasConnected_ = isConnected;
 
-        http_.loop();
         keypad_.loop();
         rfid_.loop();
 
@@ -210,6 +211,18 @@ class AppImpl
         {
             Logger::warn("APP", "MQTT retry high: %d", retry);
         }
+
+        if (freeHeap < 30000)
+        {
+            Logger::error("APP", "CRITICAL: Low heap %d bytes", (int)freeHeap);
+            
+            if (freeHeap < 20000)
+            {
+                Logger::error("APP", "Restarting due to low memory");
+                delay(1000);
+                ESP.restart();
+            }
+        }
     }
 
   private:
@@ -230,7 +243,6 @@ class AppImpl
 
     MqttService mqtt_;
     BleProvisionService ble_;
-    HttpService http_;
     KeypadService keypad_;
     RfidService rfid_;
 

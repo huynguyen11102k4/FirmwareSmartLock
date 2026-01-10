@@ -8,7 +8,7 @@ static App app;
 void
 setup()
 {
-    SPIFFS.format();
+    // SPIFFS.format();
     app.begin();
 }
 
