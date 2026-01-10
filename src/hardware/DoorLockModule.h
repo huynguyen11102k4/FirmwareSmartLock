@@ -1,13 +1,11 @@
 #pragma once
 
-#include "app/services/PublishService.h"
-#include "hardware/IHardwareModule.h"
-#include "models/AppState.h"
-
 #include <Arduino.h>
 #include <Servo.h>
 
-class DoorLockModule final : public IHardwareModule
+struct AppContext;
+
+class DoorLockModule
 {
   public:
     DoorLockModule(Servo& servo, uint8_t ledPin, uint8_t servoPin);
@@ -22,10 +20,10 @@ class DoorLockModule final : public IHardwareModule
     onDoorContactChanged(bool isOpen);
 
     void
-    begin(AppContext& ctx) override;
+    begin(AppContext& ctx);
 
     void
-    loop(AppContext& ctx) override;
+    loop(AppContext& ctx);
 
   private:
     uint32_t autoRelockAtMs_ = 0;

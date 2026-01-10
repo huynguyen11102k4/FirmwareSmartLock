@@ -2,86 +2,44 @@
 #include "models/Command.h"
 
 #include <Arduino.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
 #include <queue>
 
 class CommandQueue
 {
   public:
-    CommandQueue(size_t maxSize = 20) : maxSize_(maxSize)
-    {
-        mutex_ = xSemaphoreCreateMutex();
-    }
+    CommandQueue(size_t maxSize = 20) : maxSize_(maxSize) {}
 
-    ~CommandQueue()
+    bool enqueue(const Command& cmd)
     {
-        if (mutex_)
-        {
-            vSemaphoreDelete(mutex_);
-        }
-    }
-
-    bool
-    enqueue(const Command& cmd)
-    {
-        if (!mutex_)
+        if (queue_.size() >= maxSize_)
             return false;
 
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) != pdTRUE)
-            return false;
-
-        bool success = false;
-        if (queue_.size() < maxSize_)
-        {
-            queue_.push(cmd);
-            success = true;
-        }
-
-        xSemaphoreGive(mutex_);
-        return success;
+        queue_.push(cmd);
+        return true;
     }
 
-    bool
-    dequeue(Command& cmd)
+    bool dequeue(Command& cmd)
     {
-        if (!mutex_)
+        if (queue_.empty())
             return false;
 
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) != pdTRUE)
-            return false;
-
-        bool success = false;
-        if (!queue_.empty())
-        {
-            cmd = queue_.front();
-            queue_.pop();
-            success = true;
-        }
-
-        xSemaphoreGive(mutex_);
-        return success;
+        cmd = queue_.front();
+        queue_.pop();
+        return true;
     }
 
-    void
-    clear()
+    void clear()
     {
-        if (!mutex_)
-            return;
-
-        if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(100)) != pdTRUE)
-            return;
-
         while (!queue_.empty())
-        {
             queue_.pop();
-        }
+    }
 
-        xSemaphoreGive(mutex_);
+    size_t size() const
+    {
+        return queue_.size();
     }
 
   private:
     std::queue<Command> queue_;
-    SemaphoreHandle_t mutex_;
     size_t maxSize_;
 };

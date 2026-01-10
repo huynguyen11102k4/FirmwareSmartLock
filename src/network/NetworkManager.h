@@ -13,6 +13,4 @@ class NetworkManager
     static bool
     online();
 
-  private:
-    static bool otaStarted;
 };

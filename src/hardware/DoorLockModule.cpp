@@ -1,9 +1,13 @@
 #include "hardware/DoorLockModule.h"
 
+#include "app/AppContext.h"
 #include "config/LockConfig.h"
 #include "models/DeviceState.h"
 #include "models/MqttContract.h"
 #include "utils/Logger.h"
+
+#include "models/AppState.h"
+#include "app/services/PublishService.h"
 
 static constexpr uint8_t LOCK_ANGLE = 0;
 static constexpr uint8_t UNLOCK_ANGLE = 90;

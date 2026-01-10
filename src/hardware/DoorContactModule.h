@@ -1,10 +1,13 @@
 #pragma once
-#include "hardware/IHardwareModule.h"
+
+#include "app/AppContext.h"
 
 #include <Arduino.h>
 #include <functional>
 
-class DoorContactModule final : public IHardwareModule
+struct AppContext;
+
+class DoorContactModule 
 {
   public:
     using DoorContactCallback = std::function<void(bool isOpen)>;
@@ -18,10 +21,10 @@ class DoorContactModule final : public IHardwareModule
     isOpen() const;
 
     void
-    begin(AppContext& ctx) override;
+    begin(AppContext& ctx);
 
     void
-    loop(AppContext& ctx) override;
+    loop(AppContext& ctx);
 
   private:
     bool

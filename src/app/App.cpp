@@ -34,14 +34,16 @@ class AppImpl
 {
   public:
     AppImpl()
-        : publish_(appState_, passRepo_, cardRepo_), ctx_{appState_, publish_, lockConfig_},
+        : publish_(appState_, passRepo_, cardRepo_), 
+        ctx_{appState_, publish_},
           door_(
               lockServo_, LED_PIN, SERVO_PIN, DOOR_CONTACT_PIN,
               /*contactActiveLow=*/false,
               /*debounceMs=*/80,
               /*usePullup=*/true
           ),
-          cmdQueue_(20), mqtt_(appState_, passRepo_, cardRepo_, publish_, lockConfig_, door_),
+          cmdQueue_(20), 
+          mqtt_(appState_, passRepo_, cardRepo_, publish_, lockConfig_, door_),
           ble_(appState_, cfgMgr_, cmdQueue_),
           keypad_(appState_, passRepo_, publish_, door_, lockConfig_),
           rfid_(appState_, cardRepo_, publish_, door_, lockConfig_)
@@ -118,11 +120,17 @@ class AppImpl
         const bool isConnected = MqttManager::connected();
         if (isConnected && !wasConnected_)
         {
-            ble_.disableIfActive();
-
-            delay(1000);
-            ESP.restart();
-
+            if (appState_.runtimeFlags.bleActive)
+            {
+                Logger::info("APP", "BLE provision success. Restarting...");
+                
+                ble_.forceCleanup();
+                delay(1000);
+                
+                ESP.restart();
+                return;
+            }
+        
             mqtt_.onConnected(/*infoVersion=*/3);
         }
         wasConnected_ = isConnected;
@@ -189,40 +197,25 @@ class AppImpl
     monitorSystemHealth_()
     {
         static uint32_t lastHealthCheck = 0;
-        if ((uint32_t)(millis() - lastHealthCheck) < 10000)
-            return;
+    if ((uint32_t)(millis() - lastHealthCheck) < 30000)
+        return;
 
-        lastHealthCheck = millis();
+    lastHealthCheck = millis();
 
-        const size_t freeHeap = ESP.getFreeHeap();
-        if (freeHeap < 20000)
-        {
-            Logger::warn("APP", "Low heap: %d bytes", (int)freeHeap);
-        }
-
-        const uint32_t timeSinceFeed = WatchdogManager::timeSinceLastFeed();
-        if (timeSinceFeed > 20000)
-        {
-            Logger::warn("APP", "Watchdog feed delayed: %dms", (int)timeSinceFeed);
-        }
-
-        const int retry = MqttManager::getRetryAttempts();
-        if (retry > 10)
-        {
-            Logger::warn("APP", "MQTT retry high: %d", retry);
-        }
-
-        if (freeHeap < 30000)
-        {
-            Logger::error("APP", "CRITICAL: Low heap %d bytes", (int)freeHeap);
-            
-            if (freeHeap < 20000)
-            {
-                Logger::error("APP", "Restarting due to low memory");
-                delay(1000);
-                ESP.restart();
-            }
-        }
+    const size_t freeHeap = ESP.getFreeHeap();
+    
+    if (freeHeap < 20000)
+    {
+        Logger::error("APP", "CRITICAL: Low heap %d bytes. Restarting...", (int)freeHeap);
+        delay(1000);
+        ESP.restart();
+        return;
+    }
+    
+    if (freeHeap < 30000)
+    {
+        Logger::warn("APP", "Low heap warning: %d bytes", (int)freeHeap);
+    }
     }
 
   private:

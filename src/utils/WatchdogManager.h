@@ -5,19 +5,20 @@
 class WatchdogManager
 {
   public:
-    static void
-    begin(uint32_t timeoutSeconds = 30);
+    static void begin(uint32_t timeoutSeconds = 30)
+    {
+        esp_task_wdt_init(timeoutSeconds, true);
+        esp_task_wdt_add(NULL);
+    }
 
-    static void
-    feed();
+    static void feed()
+    {
+        esp_task_wdt_reset();
+    }
 
-    static uint32_t
-    timeSinceLastFeed();
-
-    static void
-    disable();
-
-  private:
-    static bool enabled_;
-    static uint32_t lastFeed_;
+    static void disable()
+    {
+        esp_task_wdt_delete(NULL);
+        esp_task_wdt_deinit();
+    }
 };

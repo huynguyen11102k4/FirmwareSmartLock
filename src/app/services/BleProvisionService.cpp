@@ -2,6 +2,7 @@
 
 #include "models/Command.h"
 #include "utils/JsonUtils.h"
+#include "utils/Logger.h"
 
 #include <ArduinoJson.h>
 #include <BLEDevice.h>
@@ -20,23 +21,42 @@ BleProvisionService::disableIfActive()
     if (!appState_.runtimeFlags.bleActive)
         return;
 
-    appState_.runtimeFlags.bleActive = false;
+    forceCleanup();
+}
 
-    if (serverBle_)
-    {
-        serverBle_->setCallbacks(nullptr);
-    }
+void BleProvisionService::forceCleanup()
+{
+    appState_.runtimeFlags.bleActive = false;
+    
     if (pConfig_)
     {
         pConfig_->setCallbacks(nullptr);
     }
-
+    if (serverBle_)
+    {
+        serverBle_->setCallbacks(nullptr);
+    }
+    
+    BLEAdvertising* adv = BLEDevice::getAdvertising();
+    if (adv)
+    {
+        adv->stop();
+    }
+    
+    if (serverBle_)
+    {
+        serverBle_->disconnect(serverBle_->getConnId());
+    }
+    
     BLEDevice::deinit(true);
+    
     delay(500);
-
+    
     serverBle_ = nullptr;
     pConfig_ = nullptr;
     pNotify_ = nullptr;
+    
+    Logger::info("BLE", "Cleanup complete. Free heap: %d", ESP.getFreeHeap());
 }
 
 bool

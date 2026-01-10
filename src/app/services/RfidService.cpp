@@ -246,16 +246,6 @@ RfidService::loop()
                 Logger::info("RFID", "Card AUTH SUCCESS: %s", uid.c_str());
                 door_.requestUnlock("Card");
             }
-            // else if (cardRepo_.isEmpty())
-            // {
-            //     Logger::info("RFID", "Card repo empty => auto-add card: %s", uid.c_str());
-            //     const String name = defaultCardNameNext(cardRepo_);
-            //     if (cardRepo_.add(uid, name))
-            //     {
-            //         cardRepo_.setTs((long)TimeUtils::nowSeconds());
-            //         publish_.publishICCardList();
-            //     }
-            // }
             else
             {
                 Logger::info("RFID", "Card AUTH FAILED: %s", uid.c_str());

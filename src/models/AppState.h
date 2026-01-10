@@ -4,7 +4,6 @@
 #include "models/PinAuthState.h"
 #include "models/RuntimeFlags.h"
 #include "models/SwipeAddState.h"
-#include "utils/DeviceIdentity.h"
 
 #include <Arduino.h>
 
@@ -23,26 +22,28 @@ struct AppState
     RuntimeFlags runtimeFlags;
     DeviceState deviceState;
 
-    void
-    init(const String& mac)
+    void init(const String& mac)
     {
-        // macAddress = mac;
+        macAddress = mac;
 
-        // defaultMqttTopicPrefix = DeviceIdentity::makeTopicPrefix(mac);
-        // mqttTopicPrefix = defaultMqttTopicPrefix;
-
-        // doorCode = DeviceIdentity::makeDoorCode();
-        // doorName = DeviceIdentity::makeDefaultName(mac);
-
-        // Test values
-        (void)mac;
-
-        macAddress = "AA:BB:CC:DD:EE:FF";
-        defaultMqttTopicPrefix = "aabbccddeeff";
+        // Inline DeviceIdentity logic
+        String m = mac;
+        m.replace(":", "");
+        m.toLowerCase();
+        defaultMqttTopicPrefix = m;
         mqttTopicPrefix = defaultMqttTopicPrefix;
 
-        doorCode = "";
-        doorName = "Door 01";
+        // Door code: random 6 digits
+        uint32_t r = esp_random();
+        uint32_t code = r % 1000000;
+        char buf[7];
+        snprintf(buf, sizeof(buf), "%06lu", code);
+        doorCode = String(buf);
+
+        // Door name: Door-{last 4 chars of MAC}
+        m.toUpperCase();
+        const String tail = (m.length() >= 4) ? m.substring(m.length() - 4) : m;
+        doorName = "Door-" + tail;
 
         swipeAdd.reset();
         pinAuth.reset();
@@ -50,8 +51,7 @@ struct AppState
         runtimeFlags.reset();
     }
 
-    void
-    setMqttTopicPrefix(const String& topic)
+    void setMqttTopicPrefix(const String& topic)
     {
         if (topic.length() > 0)
         {
@@ -63,8 +63,7 @@ struct AppState
         }
     }
 
-    void
-    reset()
+    void reset()
     {
         swipeAdd.reset();
         pinAuth.reset();

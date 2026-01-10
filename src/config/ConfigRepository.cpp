@@ -33,7 +33,7 @@ ConfigRepository::load(AppConfig& cfg)
     if (!exists())
     {
         cfg = temp;
-        return true;
+        return false;
     }
 
     const String json = FileSystem::readFile(AppPaths::CONFIG_JSON);
@@ -42,7 +42,7 @@ ConfigRepository::load(AppConfig& cfg)
     if (!JsonUtils::deserialize(json, doc))
     {
         cfg = temp;
-        return true;
+        return false;
     }
 
     temp.wifiSsid = doc[AppJsonKeys::WIFI_SSID] | "";

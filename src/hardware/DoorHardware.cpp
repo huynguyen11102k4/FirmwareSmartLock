@@ -1,5 +1,6 @@
 #include "hardware/DoorHardware.h"
 
+#include "app/AppContext.h"
 #include "config/LockConfig.h"
 #include "utils/Logger.h"
 
@@ -89,7 +90,7 @@ DoorHardware::onDoorContactChanged_(bool isOpen)
     // Door closed while currently unlocked → consider auto-relock
     if (!isOpen && !ctx_->app.doorLock.isLocked())
     {
-        const uint32_t delayMs = ctx_->lock.autoRelockDelayMs;
+        const uint32_t delayMs = 15000;
 
         if (delayMs == 0)
         {

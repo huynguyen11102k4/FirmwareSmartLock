@@ -1,6 +1,5 @@
 #pragma once
 #include "storage/FileSystem.h"
-#include "utils/JsonPool.h"
 #include "utils/JsonUtils.h"
 
 #include <Arduino.h>
@@ -37,7 +36,7 @@ struct LockConfig
             return false;
 
         const String json = FileSystem::readFile(CONFIG_PATH);
-        auto& doc = JsonPool::acquireLarge();
+        DynamicJsonDocument doc(2048);
 
         if (!JsonUtils::deserialize(json, doc))
             return false;
@@ -69,7 +68,7 @@ struct LockConfig
     bool
     saveToFile() const
     {
-        auto& doc = JsonPool::acquireLarge();
+        DynamicJsonDocument doc(2048);
 
         doc["unlockDurationMs"] = unlockDurationMs;
         doc["autoRelockDelayMs"] = autoRelockDelayMs;

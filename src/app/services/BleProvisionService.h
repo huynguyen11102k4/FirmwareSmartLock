@@ -22,6 +22,9 @@ class BleProvisionService
     void
     disableIfActive();
 
+    void
+    forceCleanup();
+
   private:
     void
     setBaseTopicFromConfigOrDefault_();
