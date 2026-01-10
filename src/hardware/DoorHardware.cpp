@@ -101,7 +101,7 @@ DoorHardware::onDoorContactChanged_(bool isOpen)
             Logger::info(TAG, "Auto-relock scheduled after %d ms", (int)delayMs);
 
             ctx_->app.doorLock.rearmAutoRelock(delayMs);
-            ctx_->publish.publishLog("relock_scheduled", "door_closed", String(delayMs) + "ms");
+            ctx_->publish.publishLog("RelockScheduled", "Device", String(delayMs) + "ms");
         }
     }
 }

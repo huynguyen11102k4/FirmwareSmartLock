@@ -41,8 +41,8 @@ struct AppState
         defaultMqttTopicPrefix = "aabbccddeeff";
         mqttTopicPrefix = defaultMqttTopicPrefix;
 
-        doorCode = "000000";
-        doorName = "Door-TEST";
+        doorCode = "";
+        doorName = "Door 01";
 
         swipeAdd.reset();
         pinAuth.reset();

@@ -143,7 +143,7 @@ KeypadService::loop()
         {
             Logger::info("KEYPAD", "PIN auth SUCCESS");
             appState_.pinAuth.recordSuccess();
-            door_.requestUnlock("pin");
+            door_.requestUnlock("Passcode");
         }
         else
         {

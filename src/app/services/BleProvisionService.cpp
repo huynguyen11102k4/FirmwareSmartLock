@@ -21,15 +21,22 @@ BleProvisionService::disableIfActive()
         return;
 
     appState_.runtimeFlags.bleActive = false;
-    BLEDevice::deinit(true);
-    delay(300);
-}
 
-void
-BleProvisionService::setBaseTopicFromConfigOrDefault_()
-{
-    const AppConfig& cfg = cfgMgr_.get();
-    appState_.setMqttTopicPrefix(cfg.topicPrefix);
+    if (serverBle_)
+    {
+        serverBle_->setCallbacks(nullptr);
+    }
+    if (pConfig_)
+    {
+        pConfig_->setCallbacks(nullptr);
+    }
+
+    BLEDevice::deinit(true);
+    delay(500);
+
+    serverBle_ = nullptr;
+    pConfig_ = nullptr;
+    pNotify_ = nullptr;
 }
 
 bool
@@ -43,8 +50,6 @@ BleProvisionService::parseBleConfigJsonToAppConfig_(const String& json, AppConfi
 
     outCfg.wifiSsid = doc[AppJsonKeys::WIFI_SSID] | "";
     outCfg.wifiPass = doc[AppJsonKeys::WIFI_PASS] | "";
-
-    outCfg.topicPrefix = doc[AppJsonKeys::TOPIC_PREFIX] | "";
 
     return outCfg.hasWifi();
 }
@@ -104,8 +109,6 @@ BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
         svc_.pNotify_->notify();
         return;
     }
-
-    svc_.setBaseTopicFromConfigOrDefault_();
 
     Command cmd;
     cmd.type = CommandType::APPLY_CONFIG;
