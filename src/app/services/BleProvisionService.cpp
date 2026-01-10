@@ -129,6 +129,9 @@ BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
         svc_.pNotify_->notify();
         return;
     }
+    
+    svc_.pNotify_->setValue("OK");
+    svc_.pNotify_->notify();
 
     Command cmd;
     cmd.type = CommandType::APPLY_CONFIG;
@@ -137,13 +140,8 @@ BleProvisionService::ConfigCallback::onWrite(BLECharacteristic* c)
 
     if (!svc_.cmdQueue_.enqueue(cmd))
     {
-        svc_.pNotify_->setValue("error: queue full");
-        svc_.pNotify_->notify();
         return;
     }
-
-    svc_.pNotify_->setValue("OK");
-    svc_.pNotify_->notify();
 }
 
 void
