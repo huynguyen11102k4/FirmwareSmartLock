@@ -47,7 +47,6 @@ class BleProvisionService
         
         JsonObject deviceInfo = doc.createNestedObject("device_info");
         deviceInfo["macAddress"] = appState_.macAddress;
-        deviceInfo["doorCode"] = appState_.doorCode;
         deviceInfo["doorName"] = appState_.doorName;
         deviceInfo["mqttTopicPrefix"] = appState_.mqttTopicPrefix;
         
