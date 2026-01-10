@@ -36,3 +36,9 @@ ConfigManager::updateFromBle(const AppConfig& cfg)
 
     return repo.save(config);
 }
+
+AppConfig&
+ConfigManager::getMutable()
+{
+    return config;
+}

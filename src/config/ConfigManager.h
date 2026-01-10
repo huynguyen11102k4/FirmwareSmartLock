@@ -17,6 +17,9 @@ class ConfigManager
     const AppConfig&
     get() const;
 
+    AppConfig&
+    getMutable();
+
     bool
     updateFromBle(const AppConfig& cfg);
 

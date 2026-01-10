@@ -4,6 +4,7 @@
 #include "models/PinAuthState.h"
 #include "models/RuntimeFlags.h"
 #include "models/SwipeAddState.h"
+#include "models/WifiProvisionState.h"
 
 #include <Arduino.h>
 
@@ -21,6 +22,7 @@ struct AppState
     DoorLockState doorLock;
     RuntimeFlags runtimeFlags;
     DeviceState deviceState;
+    WifiProvisionState wifiProvision;
 
     void init(const String& mac)
     {
@@ -49,6 +51,7 @@ struct AppState
         pinAuth.reset();
         doorLock.lock();
         runtimeFlags.reset();
+        wifiProvision.reset();  // ADD THIS
     }
 
     void setMqttTopicPrefix(const String& topic)
@@ -69,5 +72,6 @@ struct AppState
         pinAuth.reset();
         doorLock.lock();
         runtimeFlags.reset();
+        wifiProvision.reset();
     }
 };

@@ -113,24 +113,32 @@ class AppImpl
         WatchdogManager::feed();
 
         processCommandQueue_();
+
+        handleWifiProvisionValidation_();
+
         NetworkManager::loop();
 
         door_.loop(ctx_);
 
+        if (appState_.wifiProvision.waitingForConnection &&
+        WiFi.status() == WL_CONNECTED)
+        {
+            Logger::info("APP", "Sending information for client...");
+            
+            ble_.notifyProvisionSuccess();
+
+            Logger::info("APP", "WiFi provision successful! Restarting...");
+
+            appState_.wifiProvision.reset();
+            ble_.forceCleanup();
+            delay(1000);
+            ESP.restart();
+            return;
+        }
+
         const bool isConnected = MqttManager::connected();
         if (isConnected && !wasConnected_)
         {
-            if (appState_.runtimeFlags.bleActive)
-            {
-                Logger::info("APP", "BLE provision success. Restarting...");
-                
-                ble_.forceCleanup();
-                delay(1000);
-                
-                ESP.restart();
-                return;
-            }
-        
             mqtt_.onConnected(/*infoVersion=*/3);
         }
         wasConnected_ = isConnected;
@@ -142,6 +150,42 @@ class AppImpl
         monitorSystemHealth_();
 
         yield();
+    }
+
+    void
+    handleWifiProvisionValidation_()
+    {
+        if (!appState_.wifiProvision.waitingForConnection)
+            return;
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            return;
+        }
+
+        if (!appState_.wifiProvision.shouldRetry())
+            return;
+
+        appState_.wifiProvision.recordAttempt();
+        
+        Logger::warn("APP", "WiFi connection attempt %d/%d failed", 
+                    appState_.wifiProvision.connectionAttempts,
+                    WifiProvisionState::MAX_ATTEMPTS);
+
+        if (appState_.wifiProvision.hasExceededMaxAttempts())
+        {
+            Logger::error("APP", "WiFi provision failed. Clearing WiFi config...");
+            
+            AppConfig cfg = cfgMgr_.get();
+            cfg.clear(AppConfig::ClearMode::WIFI_ONLY);
+            cfgMgr_.save();
+            
+            appState_.wifiProvision.reset();
+            
+            ble_.notifyProvisionFailed("WiFi connection failed after 5 attempts");
+            
+            Logger::info("APP", "BLE mode active - waiting for new WiFi credentials");
+        }
     }
 
   private:
