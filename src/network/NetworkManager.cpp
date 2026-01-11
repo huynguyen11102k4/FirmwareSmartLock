@@ -18,7 +18,9 @@ NetworkManager::loop()
     if (!WifiManager::connected())
         return;
 
-    MqttManager::reconnect();
+    if (!MqttManager::connected())
+        MqttManager::reconnect();
+
     MqttManager::loop();
 }
 

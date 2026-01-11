@@ -40,13 +40,15 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
 {
     Logger::info(TAG, "UNLOCK requested (method=%s)", method.c_str());
 
-    digitalWrite(ledPin_, HIGH);
     servo_.write(UNLOCK_ANGLE);
 
     autoRelockAtMs_ = millis() + 15000;
     autoRelockArmed_ = true;
 
-    Logger::info(TAG, "AutoRelock armed after 15s");
+    ledBlinking_ = true;
+    ledLastToggleMs_ = 0;
+    ledState_ = false;
+    digitalWrite(ledPin_, LOW);
 
     ctx.app.doorLock.unlock(15000);
     ctx.app.deviceState.setDoorState(DoorState::UNLOCKED);
@@ -55,12 +57,16 @@ DoorLockModule::unlock(AppContext& ctx, const String& method)
     ctx.publish.publishLog(MqttDoorEvent::DOOR_UNLOCKED, method, "");
 }
 
+
 void
 DoorLockModule::lock(AppContext& ctx, const String& reason)
 {
     Logger::info(TAG, "LOCK requested (reason=%s)", reason.c_str());
 
     servo_.write(LOCK_ANGLE);
+
+    ledBlinking_ = false;
+    ledState_ = false;
     digitalWrite(ledPin_, LOW);
 
     ctx.app.doorLock.lock();
@@ -102,10 +108,22 @@ DoorLockModule::handleAutoRelock_(AppContext& ctx)
 void
 DoorLockModule::loop(AppContext& ctx)
 {
+    const unsigned long now = millis();
+
+    if (ledBlinking_)
+    {
+        if (now - ledLastToggleMs_ >= 1000)
+        {
+            ledLastToggleMs_ = now;
+            ledState_ = !ledState_;
+            digitalWrite(ledPin_, ledState_ ? HIGH : LOW);
+        }
+    }
+
     if (!autoRelockArmed_)
         return;
 
-    if ((int32_t)(millis() - autoRelockAtMs_) < 0)
+    if ((int32_t)(now - autoRelockAtMs_) < 0)
         return;
 
     Logger::info(TAG, "AutoRelock EXECUTE");
@@ -113,6 +131,7 @@ DoorLockModule::loop(AppContext& ctx)
     servo_.write(LOCK_ANGLE);
     digitalWrite(ledPin_, LOW);
 
+    ledBlinking_ = false;
     autoRelockArmed_ = false;
 
     ctx.app.doorLock.lock();
