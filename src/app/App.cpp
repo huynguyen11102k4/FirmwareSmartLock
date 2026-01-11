@@ -203,7 +203,7 @@ class AppImpl
             return;
 
         const Passcode t = passRepo_.getTemp();
-        if (t.isExpired(TimeUtils::nowSeconds()))
+        if (t.isExpired(passRepo_.nowSecondsFallback()))
         {
             passRepo_.clearTemp();
             publish_.publishPasscodeList();

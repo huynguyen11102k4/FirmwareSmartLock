@@ -2,6 +2,7 @@
 
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
+#include "utils/TimeUtils.h"
 
 #include <ArduinoJson.h>
 
@@ -93,6 +94,7 @@ PasscodeRepository::load()
         }
     }
 
+    tsMillisAtLoad_ = millis();
     return true;
 }
 
@@ -263,16 +265,29 @@ PasscodeRepository::validateAndConsume(const String& code, long now)
     return false;
 }
 
-long
+uint64_t
 PasscodeRepository::ts() const
 {
     return ts_;
 }
 
 void
-PasscodeRepository::setTs(long ts)
+PasscodeRepository::setTs(uint64_t ts)
 {
     ts_ = ts;
+    tsMillisAtLoad_ = millis();
+}
+
+uint64_t 
+PasscodeRepository::nowSecondsFallback() const
+{
+    if (ts_ > 0)
+    {
+        const uint32_t deltaMs = millis() - tsMillisAtLoad_;
+        return (uint64_t)ts_ + (deltaMs / 1000);
+    }
+
+    return TimeUtils::nowSeconds();
 }
 
 bool

@@ -79,6 +79,26 @@ MqttService::attachCallback()
 void
 MqttService::onConnected(int infoVersion)
 {
+    const uint64_t now = TimeUtils::nowSeconds();
+
+    if (now > 1700000000ULL)
+    {
+        passRepo_.setTs(now);
+        Logger::info(
+            "MQTT",
+            "Passcode ts synchronized on connect: %llu",
+            (unsigned long long)now
+        );
+    }
+    else
+    {
+        Logger::warn(
+            "MQTT",
+            "Skip ts sync on connect (invalid time=%llu)",
+            (unsigned long long)now
+        );
+    }
+
     const String base = appState_.mqttTopicPrefix;
     Logger::info(
         TAG_DISP,
@@ -207,7 +227,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
 
     const String action = doc["action"] | "";
     const String type = doc["type"] | "";
-    const uint64_t now = TimeUtils::nowSeconds();
+    const uint64_t now = passRepo_.nowSecondsFallback();
 
     Logger::info(TAG_PASS, "parsed | action='%s' type='%s' now=%llu", action.c_str(), type.c_str(), (unsigned long long)now);
 

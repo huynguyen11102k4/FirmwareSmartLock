@@ -62,7 +62,7 @@ KeypadService::checkPIN_(const String& pin)
 {
     Logger::info("KEYPAD", "Checking PIN: %s", pin.c_str());
 
-    const uint64_t now = TimeUtils::nowSeconds();
+    const uint64_t now = passRepo_.nowSecondsFallback();
 
     const String master = passRepo_.getMaster();
     if (master.length() >= (size_t)lockConfig_.minPinLength &&

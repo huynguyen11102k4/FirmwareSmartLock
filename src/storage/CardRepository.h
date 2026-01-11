@@ -59,14 +59,15 @@ class CardRepository
     size_t
     size() const;
 
-    long
+    uint64_t
     ts() const;
+    
     void
-    setTs(long ts);
+    setTs(uint64_t ts);
 
   private:
     std::vector<CardItem> cards_;
-    long ts_{0};
+    uint64_t ts_{0};
 
     static constexpr const char* PATH = AppPaths::CARDS_JSON;
 

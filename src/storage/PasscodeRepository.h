@@ -11,13 +11,11 @@ class PasscodeRepository
     bool
     load();
 
-    /* ================= MASTER ================= */
     String
     getMaster() const;
     bool
     setMaster(const String& pass);
 
-    /* ================= TEMP ================= */
     bool
     hasTemp() const;
     const Passcode&
@@ -27,7 +25,6 @@ class PasscodeRepository
     bool
     clearTemp();
 
-    /* ================= STORED (one_time / timed) ================= */
     const std::vector<Passcode>&
     listItems() const;
     bool
@@ -42,11 +39,15 @@ class PasscodeRepository
     bool
     validateAndConsume(const String& code, long now);
 
-    /* ================= META ================= */
-    long
+    uint64_t 
+    nowSecondsFallback() const;
+
+
+    uint64_t
     ts() const;
+    
     void
-    setTs(long ts);
+    setTs(uint64_t ts);
 
   private:
     String master_;
@@ -55,7 +56,9 @@ class PasscodeRepository
     bool hasTemp_{false};
 
     std::vector<Passcode> items_;
-    long ts_{0};
+    uint64_t ts_{0};
+
+    uint32_t tsMillisAtLoad_ = 0;
 
     static constexpr const char* PATH = AppPaths::PASSCODES_JSON;
 
