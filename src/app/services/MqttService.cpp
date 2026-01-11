@@ -115,11 +115,8 @@ MqttService::onConnected(int infoVersion)
     logSubscribeTopic_(tBatReq);
     MqttManager::subscribe(tBatReq, 0);
 
-    Logger::info(TAG_DISP, "publish bootstrap: info/state/passcodes/cards");
-    publish_.publishInfo(0, infoVersion);
-    publish_.publishState("locked", "startup");
-    publish_.publishPasscodeList();
-    publish_.publishICCardList();
+    Logger::info(TAG_DISP, "bootstrap publish deferred");
+    pendingBootstrapPublish_ = true;
 }
 
 void

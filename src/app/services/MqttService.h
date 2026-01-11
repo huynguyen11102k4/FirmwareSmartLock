@@ -48,4 +48,5 @@ class MqttService
     static MqttService* s_instance_;
 
     uint32_t lastOnConnectedMs_ = 0;
+    bool pendingBootstrapPublish_ = false;
 };

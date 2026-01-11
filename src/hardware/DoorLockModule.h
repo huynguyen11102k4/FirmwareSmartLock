@@ -36,4 +36,10 @@ class DoorLockModule
     uint8_t ledPin_;
     uint8_t servoPin_;
     bool isDoorContactOpen_{false};
+
+    bool ledBlinking_ = false;
+    unsigned long ledBlinkIntervalMs_ = 1000;
+    unsigned long ledLastToggleMs_ = 0;
+    bool ledState_ = false;
+
 };

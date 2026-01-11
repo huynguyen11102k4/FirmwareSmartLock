@@ -124,9 +124,7 @@ RfidService::loop()
         appState_.runtimeFlags.swipeAddMode = false;
         appState_.swipeAdd.reset();
 
-        MqttManager::publish(
-            Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_timeout", false
-        );
+        publish_.publishLog("HandleCardFailed", "SwipeAdd", "Hết thời gian chờ quét thẻ");
     }
 
     constexpr uint32_t kRemoveGraceMs = 400;
@@ -212,15 +210,12 @@ RfidService::loop()
                     {
                         cardRepo_.setTs((long)TimeUtils::nowSeconds());
                         Logger::info("RFID", "Card added to repository: %s", uid.c_str());
+                        publish_.publishLog("CardAdded", "SwipeAdd", "Thêm Card thành công");
                         publish_.publishICCardList();
                     }
 
                     appState_.runtimeFlags.swipeAddMode = false;
                     appState_.swipeAdd.reset();
-
-                    MqttManager::publish(
-                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_success", false
-                    );
                 }
                 else
                 {
@@ -229,9 +224,7 @@ RfidService::loop()
                     appState_.runtimeFlags.swipeAddMode = false;
                     appState_.swipeAdd.reset();
 
-                    MqttManager::publish(
-                        Topics::iccardsStatus(appState_.mqttTopicPrefix), "swipe_add_failed", false
-                    );
+                    publish_.publishLog("HandleCardFailed", "SwipeAdd", "Thêm thất bại do quét không cùng thẻ");
                 }
 
                 cleanupPcd_();

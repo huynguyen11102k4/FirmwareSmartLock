@@ -30,13 +30,13 @@ void
 MqttManager::setupClient()
 {
     secureClient.setCACert(hivemq_root_ca);
-    secureClient.setTimeout(20);
+    secureClient.setTimeout(30);
     secureClient.setHandshakeTimeout(30);
 
     mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt.setKeepAlive(60);
-    mqtt.setSocketTimeout(20);
-    mqtt.setBufferSize(2048);
+    mqtt.setSocketTimeout(30);
+    mqtt.setBufferSize(4096);
 }
 
 void
@@ -101,9 +101,17 @@ bool
 MqttManager::publish(const String& topic, const String& payload, bool retained)
 {
     if (!mqtt.connected())
+    {
+        Logger::warn("MQTT", "Publish skipped - not connected");
         return false;
+    }
+
+    const int stateBefore = mqtt.state();
 
     const bool success = mqtt.publish(topic.c_str(), payload.c_str(), retained);
+
+    const int stateAfter = mqtt.state();
+    const bool connectedAfter = mqtt.connected();
 
     if (success)
     {
@@ -112,26 +120,41 @@ MqttManager::publish(const String& topic, const String& payload, bool retained)
             retained
         );
 
-        StaticJsonDocument<1024> doc;
-        DeserializationError err = deserializeJson(doc, payload);
-
-        if (err)
+        if (stateBefore != stateAfter)
         {
-            Logger::warn("MQTT", "Payload is not valid JSON (%s), raw:", err.c_str());
-            Logger::info("MQTT", "%s", payload.c_str());
+            Logger::warn(
+                "MQTT", "State changed after publish: %d -> %d, connected=%d",
+                stateBefore, stateAfter, connectedAfter
+            );
+        }
+
+        if (payload.length() > 0 && (payload[0] == '{' || payload[0] == '['))
+        {
+            StaticJsonDocument<1024> doc;
+            DeserializationError err = deserializeJson(doc, payload);
+
+            if (!err)
+            {
+                String pretty;
+                serializeJsonPretty(doc, pretty);
+                Logger::info("MQTT", "Payload:\n%s", pretty.c_str());
+            }
+            else
+            {
+                Logger::warn("MQTT", "JSON parse failed (%s), raw: %s", err.c_str(), payload.c_str());
+            }
         }
         else
         {
-            String pretty;
-            serializeJsonPretty(doc, pretty);
-            Logger::info("MQTT", "Payload:\n%s", pretty.c_str());
+            // Plain text payload
+            Logger::info("MQTT", "Payload: %s", payload.c_str());
         }
     }
     else
     {
         Logger::error(
-            "MQTT", "Publish FAILED topic=%s size=%d retained=%d state=%d", topic.c_str(),
-            payload.length(), retained, mqtt.state()
+            "MQTT", "Publish FAILED topic=%s size=%d retained=%d state=%d->%d", topic.c_str(),
+            payload.length(), retained, stateBefore, stateAfter
         );
     }
 
@@ -159,4 +182,86 @@ int
 MqttManager::getRetryAttempts()
 {
     return retryPolicy.getAttemptCount();
+}
+
+class StringPrinter : public Print
+{
+public:
+    String buffer;
+    
+    size_t write(uint8_t c) override
+    {
+        buffer += (char)c;
+        return 1;
+    }
+    
+    size_t write(const uint8_t* buf, size_t size) override
+    {
+        buffer.reserve(buffer.length() + size);
+        for (size_t i = 0; i < size; i++)
+        {
+            buffer += (char)buf[i];
+        }
+        return size;
+    }
+};
+
+bool
+MqttManager::publishStream(
+    const String& topic,
+    std::function<void(Print&)> writer,
+    bool retained
+)
+{
+    if (!mqtt.connected())
+    {
+        Logger::error("MQTT", "PublishStream FAILED - not connected");
+        return false;
+    }
+
+    StringPrinter printer;
+    
+    try
+    {
+        writer(printer);
+    }
+    catch (...)
+    {
+        Logger::error("MQTT", "Writer callback EXCEPTION");
+        return false;
+    }
+
+    const String& payload = printer.buffer;
+
+    if (payload.length() == 0)
+    {
+        Logger::warn("MQTT", "PublishStream empty payload topic=%s", topic.c_str());
+        return false;
+    }
+
+    if (payload.length() > 4096)
+    {
+        Logger::error(
+            "MQTT", "PublishStream payload TOO LARGE (%d bytes) topic=%s", 
+            payload.length(), topic.c_str()
+        );
+        return false;
+    }
+
+    Logger::info(
+        "MQTT", "PublishStream topic=%s size=%d retained=%d", 
+        topic.c_str(), payload.length(), retained
+    );
+
+    const bool success = publish(topic, payload, false);
+
+    if (!success)
+    {
+        Logger::error("MQTT", "PublishStream FAILED topic=%s state=%d", topic.c_str(), mqtt.state());
+        return false;
+    }
+
+    Logger::info("MQTT", "PublishStream OK topic=%s", topic.c_str());
+
+    return true;
 }
