@@ -79,6 +79,26 @@ MqttService::attachCallback()
 void
 MqttService::onConnected(int infoVersion)
 {
+    const uint64_t now = TimeUtils::nowSeconds();
+
+    if (now > 1700000000ULL)
+    {
+        passRepo_.setTs(now);
+        Logger::info(
+            "MQTT",
+            "Passcode ts synchronized on connect: %llu",
+            (unsigned long long)now
+        );
+    }
+    else
+    {
+        Logger::warn(
+            "MQTT",
+            "Skip ts sync on connect (invalid time=%llu)",
+            (unsigned long long)now
+        );
+    }
+
     const String base = appState_.mqttTopicPrefix;
     Logger::info(
         TAG_DISP,
@@ -207,7 +227,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
 
     const String action = doc["action"] | "";
     const String type = doc["type"] | "";
-    const uint64_t now = TimeUtils::nowSeconds();
+    const uint64_t now = passRepo_.nowSecondsFallback();
 
     Logger::info(TAG_PASS, "parsed | action='%s' type='%s' now=%llu", action.c_str(), type.c_str(), (unsigned long long)now);
 
@@ -217,7 +237,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         Logger::info(TAG_PASS, "add master | codeLen=%u", (unsigned)newCode.length());
 
         passRepo_.setMaster(newCode);
-        passRepo_.setTs((long)now);
+        passRepo_.setTs((uint64_t)now);
 
         publish_.publishPasscodeList();
         publish_.publishLog("MasterCodeAdded", "AppRequest", newCode);
@@ -234,6 +254,9 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
         const uint64_t expireAt = (uint64_t)(doc["expireAt"] | 0);
         const uint64_t ts = (uint64_t)(doc["ts"] | now);
 
+        t.effectiveAt = effectiveAt;
+        t.expireAt = expireAt;
+
         Logger::info(
             TAG_PASS,
             "add temp | type='%s' codeLen=%u effectiveAt=%llu expireAt=%llu ts=%llu",
@@ -244,12 +267,6 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
             (unsigned long long)ts
         );
 
-        if (effectiveAt > 0 && now < effectiveAt)
-        {
-            Logger::warn(TAG_PASS, "not effective yet | now=%llu < effectiveAt=%llu", (unsigned long long)now, (unsigned long long)effectiveAt);
-            publish_.publishLog("HandlePasscodeRequestFailed", "AppRequest", "Passcode chưa có hiệu lực.");
-        }
-
         if (expireAt > 0 && now >= expireAt)
         {
             Logger::warn(TAG_PASS, "expired | now=%llu >= expireAt=%llu", (unsigned long long)now, (unsigned long long)expireAt);
@@ -257,8 +274,21 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
             return;
         }
 
+        if (expireAt > 0 && expireAt <= effectiveAt)
+        {
+            publish_.publishLog("HandlePasscodeRequestFailed", "AppRequest", "Thời gian không hợp lệ.");
+            return;
+        }
+
+        Passcode dummy;
+        if (passRepo_.findItemByCode(t.code, dummy))
+        {
+            publish_.publishLog("HandlePasscodeRequestFailed", "AppRequest", "Passcode đã tồn tại.");
+            return;
+        }
+
         passRepo_.addItem(t);
-        passRepo_.setTs((long)ts);
+        passRepo_.setTs((uint64_t)ts);
 
         Logger::info(TAG_PASS, "added -> publish list");
         publish_.publishPasscodeList();
@@ -282,7 +312,7 @@ MqttService::handlePasscodesTopic_(const String& payloadStr)
 
             if (removed)
             {
-                passRepo_.setTs((long)now);
+                passRepo_.setTs((uint64_t)now);
 
                 publish_.publishPasscodeList();
                 publish_.publishLog("PasscodeDeleted", "AppRequest", "Xóa Passcode thành công.");
@@ -339,7 +369,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
         if (ok)
         {
-            cardRepo_.setTs((long)TimeUtils::nowSeconds());
+            cardRepo_.setTs((uint64_t)TimeUtils::nowSeconds());
             publish_.publishICCardList();
             publish_.publishLog("CardAdded", "AppRequest", "Thêm Card thành công");
         }
@@ -361,7 +391,7 @@ MqttService::handleIccardsTopic_(const String& payloadStr)
 
         if (ok)
         {
-            cardRepo_.setTs((long)TimeUtils::nowSeconds());
+            cardRepo_.setTs((uint64_t)TimeUtils::nowSeconds());
             publish_.publishICCardList();
             publish_.publishLog("CardDeleted", "AppRequest", "Xóa Card thành công.");
         }

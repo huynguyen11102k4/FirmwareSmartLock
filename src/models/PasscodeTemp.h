@@ -32,8 +32,8 @@ struct Passcode
     {
         obj["code"] = code;
         obj["type"] = type;
-        obj["effectiveAt"] = effectiveAt;
-        obj["expireAt"] = expireAt;
+        obj["effectiveAt"] = (uint64_t)effectiveAt;
+        obj["expireAt"] = (uint64_t)expireAt;
     }
 
     static Passcode
@@ -42,8 +42,8 @@ struct Passcode
         Passcode p;
         p.code = obj["code"] | "";
         p.type = obj["type"] | "";
-        p.effectiveAt = (uint64_t)(obj["effectiveAt"] | 0);
-        p.expireAt = (uint64_t)(obj["expireAt"] | 0);
+        p.effectiveAt = (uint64_t)(obj["effectiveAt"] | 0ULL);
+        p.expireAt = (uint64_t)(obj["expireAt"] | 0ULL);
         return p;
     }
 };

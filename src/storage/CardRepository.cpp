@@ -166,14 +166,14 @@ CardRepository::size() const
     return cards_.size();
 }
 
-long
+uint64_t
 CardRepository::ts() const
 {
     return ts_;
 }
 
 void
-CardRepository::setTs(long ts)
+CardRepository::setTs(uint64_t ts)
 {
     ts_ = ts;
 }

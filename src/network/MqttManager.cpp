@@ -36,7 +36,7 @@ MqttManager::setupClient()
     mqtt.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt.setKeepAlive(60);
     mqtt.setSocketTimeout(30);
-    mqtt.setBufferSize(4096);
+    mqtt.setBufferSize(8192);
 }
 
 void
@@ -239,7 +239,7 @@ MqttManager::publishStream(
         return false;
     }
 
-    if (payload.length() > 4096)
+    if (payload.length() > 8192)
     {
         Logger::error(
             "MQTT", "PublishStream payload TOO LARGE (%d bytes) topic=%s", 

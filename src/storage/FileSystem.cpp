@@ -14,7 +14,7 @@ tmpPathFor(const char* path)
 bool
 FileSystem::begin()
 {
-    return SPIFFS.begin(true);
+    return SPIFFS.begin(false);
 }
 
 bool
