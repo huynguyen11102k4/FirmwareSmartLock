@@ -3,6 +3,8 @@
 
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
+#include <functional>
+#include <Print.h>
 
 using MqttCallback = void (*)(char*, byte*, unsigned int);
 
@@ -32,6 +34,10 @@ class MqttManager
 
     static int
     getRetryAttempts();
+
+    static bool 
+    publishStream(const String& topic, std::function<void(Print&)> writer, bool retained = false);
+
 
   private:
     static void

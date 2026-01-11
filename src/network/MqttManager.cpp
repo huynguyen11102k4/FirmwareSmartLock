@@ -160,3 +160,36 @@ MqttManager::getRetryAttempts()
 {
     return retryPolicy.getAttemptCount();
 }
+
+bool
+MqttManager::publishStream(
+    const String& topic,
+    std::function<void(Print&)> writer,
+    bool retained
+)
+{
+    if (!mqtt.connected())
+        return false;
+
+    if (!mqtt.beginPublish(topic.c_str(), 0, retained))
+    {
+        Logger::error("MQTT", "beginPublish FAILED topic=%s", topic.c_str());
+        return false;
+    }
+
+    writer(mqtt);
+
+    const bool ok = mqtt.endPublish();
+
+    if (ok)
+    {
+        Logger::info("MQTT", "PublishStream OK topic=%s", topic.c_str());
+    }
+    else
+    {
+        Logger::error("MQTT", "PublishStream FAILED topic=%s", topic.c_str());
+    }
+
+    return ok;
+}
+
