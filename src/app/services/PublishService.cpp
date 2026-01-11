@@ -5,6 +5,7 @@
 #include "network/MqttManager.h"
 #include "utils/JsonUtils.h"
 #include "utils/TimeUtils.h"
+#include "utils/Logger.h"
 
 #include <ArduinoJson.h>
 
@@ -61,7 +62,7 @@ PublishService::publishState(const String& state, const String& reason)
             doc["state"] = state;
             doc["source"] = "device";
             doc["method"] = reason;
-            doc["ts"] = (long)TimeUtils::nowSeconds();
+            doc["ts"] = (uint64_t)TimeUtils::nowSeconds();
 
             serializeJson(doc, out);
         },
@@ -87,7 +88,7 @@ PublishService::publishLog(const String& ev, const String& method, const String&
             if (!detail.isEmpty())
                 doc["detail"] = detail;
 
-            doc["ts"] = (long)TimeUtils::nowSeconds();
+            doc["ts"] = (uint64_t)TimeUtils::nowSeconds();
 
             serializeJson(doc, out);
         },
@@ -108,7 +109,7 @@ PublishService::publishBattery(int percent)
             StaticJsonDocument<64> doc;
 
             doc["battery"] = percent;
-            doc["ts"] = (long)TimeUtils::nowSeconds();
+            doc["ts"] = (uint64_t)TimeUtils::nowSeconds();
 
             serializeJson(doc, out);
         },
@@ -122,17 +123,23 @@ PublishService::publishPasscodeList()
     if (!MqttManager::connected())
         return;
 
-    const long ts = (long)TimeUtils::nowSeconds();
+    const long ts = (uint64_t)TimeUtils::nowSeconds();
 
     const auto& stored = passRepo_.listItems();
     const String master = passRepo_.getMaster();
     const bool hasMaster = !isBlank(master);
 
+    const size_t itemCount = stored.size() + (hasMaster ? 1 : 0);
+    const size_t requiredSize = 128 + (itemCount * 120);
+
+    Logger::info("PUBLISH", "publishPasscodeList: items=%d, buffer=%d bytes", 
+                itemCount, requiredSize);
+
     MqttManager::publishStream(
         Topics::passcodesList(appState_.mqttTopicPrefix),
         [&](Print& out)
         {
-            StaticJsonDocument<256> doc;
+            DynamicJsonDocument doc(requiredSize);
 
             doc[AppJsonKeys::TS] = ts;
             JsonArray items = doc.createNestedArray(AppJsonKeys::PASSCODES);
@@ -149,11 +156,20 @@ PublishService::publishPasscodeList()
                 JsonObject o = items.createNestedObject();
                 o["code"] = p.code;
                 o["type"] = p.type;
-                o["effectiveAt"] = (long)p.effectiveAt;
-                o["expireAt"] = (long)p.expireAt;
+                o["effectiveAt"] = (uint64_t)p.effectiveAt;
+                o["expireAt"] = (uint64_t)p.expireAt;
+            }
+
+            if (doc.overflowed())
+            {
+                Logger::error("PUBLISH", "JSON buffer overflow! Required: %d", requiredSize);
+                return;
             }
 
             serializeJson(doc, out);
+
+            Logger::info("PUBLISH", "JSON size: %d bytes, buffer: %d bytes", 
+                        measureJson(doc), requiredSize);
         },
         false
     );
@@ -167,14 +183,24 @@ PublishService::publishICCardList()
     if (!MqttManager::connected())
         return;
 
-    const long ts = (long)TimeUtils::nowSeconds();
+    const long ts = (uint64_t)TimeUtils::nowSeconds();
     const auto& cards = cardRepo_.list();
+
+    const size_t itemCount = cards.size();
+    const size_t requiredSize = 128 + (itemCount * 120);
+
+    Logger::info(
+        "PUBLISH",
+        "publishICCardList: items=%d, buffer=%d bytes",
+        itemCount,
+        requiredSize
+    );
 
     MqttManager::publishStream(
         Topics::iccardsList(appState_.mqttTopicPrefix),
         [&](Print& out)
         {
-            StaticJsonDocument<256> doc;
+            DynamicJsonDocument doc(requiredSize);
 
             doc[AppJsonKeys::TS] = ts;
             JsonArray items = doc.createNestedArray(AppJsonKeys::CARDS);
@@ -193,13 +219,31 @@ PublishService::publishICCardList()
                 o["name"] = name;
             }
 
+            if (doc.overflowed())
+            {
+                Logger::error(
+                    "PUBLISH",
+                    "ICCard JSON buffer overflow! Required: %d",
+                    requiredSize
+                );
+                return;
+            }
+
             serializeJson(doc, out);
+
+            Logger::info(
+                "PUBLISH",
+                "ICCard JSON size: %d bytes, buffer: %d bytes",
+                measureJson(doc),
+                requiredSize
+            );
         },
         false
     );
 
     cardRepo_.setTs(ts);
 }
+
 
 void
 PublishService::publishInfo(int batteryPercent, int version)

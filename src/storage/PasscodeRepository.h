@@ -45,7 +45,7 @@ class PasscodeRepository
 
     uint64_t
     ts() const;
-    
+
     void
     setTs(uint64_t ts);
 
@@ -56,7 +56,7 @@ class PasscodeRepository
     bool hasTemp_{false};
 
     std::vector<Passcode> items_;
-    uint64_t ts_{0};
+    uint64_t ts_{0ULL};
 
     uint32_t tsMillisAtLoad_ = 0;
 

@@ -38,24 +38,51 @@ KeypadService::begin()
 {
     Logger::info("KEYPAD", "=== KEYPAD SERVICE INIT ===");
 
+    // ---- Master ----
     const String master = passRepo_.getMaster();
-    Logger::info("KEYPAD", "MASTER PIN loaded: '%s' (len=%d)", master.c_str(), master.length());
-
-    if (passRepo_.hasTemp())
+    if (!master.isEmpty())
     {
-        const Passcode t = passRepo_.getTemp();
         Logger::info(
-            "KEYPAD", "TEMP PIN loaded: '%s' (expire=%ld, now=%ld)", t.code.c_str(), t.expireAt,
-            TimeUtils::nowSeconds()
+            "KEYPAD",
+            "MASTER PIN loaded: '%s' (len=%u)",
+            master.c_str(),
+            (unsigned)master.length()
         );
     }
     else
     {
-        Logger::info("KEYPAD", "NO TEMP PIN loaded");
+        Logger::warn("KEYPAD", "NO MASTER PIN");
+    }
+
+    // ---- Items (one_time / timed) ----
+    const auto& items = passRepo_.listItems();
+    Logger::info("KEYPAD", "PASSCODE ITEMS count=%u", (unsigned)items.size());
+
+    const uint64_t now = TimeUtils::nowSeconds();
+
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        const Passcode& p = items[i];
+
+        bool expired = p.isExpired(now);
+        bool effective = p.isEffective(now);
+
+        Logger::info(
+            "KEYPAD",
+            "ITEM[%u]: code='%s' type='%s' effectiveAt=%llu expireAt=%llu effective=%d expired=%d",
+            (unsigned)i,
+            p.code.c_str(),
+            p.type.c_str(),
+            (unsigned long long)p.effectiveAt,
+            (unsigned long long)p.expireAt,
+            (int)effective,
+            (int)expired
+        );
     }
 
     Logger::info("KEYPAD", "===========================");
 }
+
 
 bool
 KeypadService::checkPIN_(const String& pin)

@@ -3,6 +3,7 @@
 #include "storage/FileSystem.h"
 #include "utils/JsonUtils.h"
 #include "utils/TimeUtils.h"
+#include "utils/Logger.h"
 
 #include <ArduinoJson.h>
 
@@ -17,7 +18,6 @@ isCodeValid(const String& code)
     return !code.isEmpty();
 }
 
-// items_ chỉ chứa one_time / timed
 bool
 isTypeValid(const String& type)
 {
@@ -55,32 +55,36 @@ PasscodeRepository::load()
     if (!JsonUtils::deserialize(json, doc))
         return false;
 
-    master_ = doc[AppJsonKeys::PASSCODES_MASTER] | "";
+    if (doc.containsKey(AppJsonKeys::TS))
+        ts_ = doc[AppJsonKeys::TS] | 0;
+
+    if (doc.containsKey(AppJsonKeys::PASSCODES_MASTER))
+    {
+        master_ = doc[AppJsonKeys::PASSCODES_MASTER] | "";
+        master_.trim();
+    }
 
     if (doc.containsKey(AppJsonKeys::PASSCODES_TEMP) &&
         doc[AppJsonKeys::PASSCODES_TEMP].is<JsonObject>())
     {
-        JsonObject obj = doc[AppJsonKeys::PASSCODES_TEMP].as<JsonObject>();
-
-        temp_ = Passcode::fromJson(obj);
+        temp_ = Passcode::fromJson(
+            doc[AppJsonKeys::PASSCODES_TEMP].as<JsonObjectConst>()
+        );
         hasTemp_ = isCodeValid(temp_.code);
     }
 
-    if (doc.containsKey(AppJsonKeys::TS))
-        ts_ = doc[AppJsonKeys::TS] | 0;
-
-    if (doc.containsKey(AppJsonKeys::PASSCODES) && doc[AppJsonKeys::PASSCODES].is<JsonArray>())
+    if (doc.containsKey("items") &&
+        doc["items"].is<JsonArray>())
     {
-        JsonArray arr = doc[AppJsonKeys::PASSCODES].as<JsonArray>();
+        JsonArray arr = doc["items"].as<JsonArray>();
+        items_.reserve(arr.size());
 
         for (JsonVariantConst v : arr)
         {
             if (!v.is<JsonObject>())
                 continue;
 
-            JsonObjectConst obj = v.as<JsonObjectConst>();
-            Passcode p = Passcode::fromJson(obj);
-
+            Passcode p = Passcode::fromJson(v.as<JsonObjectConst>());
             p.code.trim();
             p.type.trim();
 
@@ -97,6 +101,8 @@ PasscodeRepository::load()
     tsMillisAtLoad_ = millis();
     return true;
 }
+
+
 
 String
 PasscodeRepository::getMaster() const
@@ -293,26 +299,65 @@ PasscodeRepository::nowSecondsFallback() const
 bool
 PasscodeRepository::saveAll()
 {
-    const size_t est = kMinCap + items_.size() * 96;
+    const char* TAG = "PASSCODE_SAVE";
+
+    Logger::info(TAG, "==== saveAll() BEGIN ====");
+    Logger::info(TAG, "master='%s'", master_.c_str());
+    Logger::info(TAG, "ts=%llu", (unsigned long long)ts_);
+    Logger::info(TAG, "items count=%u", (unsigned)items_.size());
+
+    for (size_t i = 0; i < items_.size(); ++i)
+    {
+        const auto& p = items_[i];
+        Logger::info(
+            TAG,
+            "item[%u]: code='%s', type='%s', effectiveAt=%llu, expireAt=%llu",
+            (unsigned)i,
+            p.code.c_str(),
+            p.type.c_str(),
+            (unsigned long long)p.effectiveAt,
+            (unsigned long long)p.expireAt
+        );
+    }
+
+    const size_t est = kMinCap + items_.size() * 128;
     DynamicJsonDocument doc(est > kMaxCap ? kMaxCap : est);
 
     doc[AppJsonKeys::PASSCODES_MASTER] = master_;
-
-    doc[AppJsonKeys::TS] = ts_;
-
-    if (hasTemp_)
-    {
-        JsonObject t = doc.createNestedObject(AppJsonKeys::PASSCODES_TEMP);
-        temp_.toJson(t);
-    }
+    doc[AppJsonKeys::TS] = (uint64_t)ts_;
 
     JsonArray arr = doc.createNestedArray(AppJsonKeys::PASSCODES);
-
     for (const auto& p : items_)
     {
         JsonObject o = arr.createNestedObject();
-        p.toJson(o);
+        o["code"] = p.code;
+        o["type"] = p.type;
+        o["effectiveAt"] = (uint64_t)p.effectiveAt;
+        o["expireAt"] = (uint64_t)p.expireAt;
     }
 
-    return FileSystem::writeFileAtomic(PATH, JsonUtils::serialize(doc));
+    String json = JsonUtils::serialize(doc);
+    Logger::info(TAG, "json length=%u", (unsigned)json.length());
+
+    const unsigned maxShow = 256;
+    if (json.length() <= maxShow)
+    {
+        Logger::info(TAG, "json='%s'", json.c_str());
+    }
+    else
+    {
+        Logger::info(
+            TAG,
+            "json(head %u)='%s...'",
+            maxShow,
+            json.substring(0, maxShow).c_str()
+        );
+    }
+
+    const bool ok = FileSystem::writeFileAtomic(PATH, json);
+
+    Logger::info(TAG, "writeFileAtomic -> %d", (int)ok);
+    Logger::info(TAG, "==== saveAll() END ====");
+
+    return ok;
 }

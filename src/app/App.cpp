@@ -78,13 +78,13 @@ class AppImpl
 
         appState_.init(WiFi.macAddress());
 
-        passRepo_.load();
-        cardRepo_.load();
-
         const bool hasConfig = cfgMgr_.load();
         setBaseTopicFromConfigOrDefault_();
 
         door_.begin(ctx_);
+
+        passRepo_.load();
+        cardRepo_.load();
 
         rfid_.begin();
         keypad_.begin();

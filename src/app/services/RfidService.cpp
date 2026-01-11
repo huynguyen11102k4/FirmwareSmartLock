@@ -208,7 +208,7 @@ RfidService::loop()
                     const String name = defaultCardNameNext(cardRepo_);
                     if (cardRepo_.add(uid, name))
                     {
-                        cardRepo_.setTs((long)TimeUtils::nowSeconds());
+                        cardRepo_.setTs((uint64_t)TimeUtils::nowSeconds());
                         Logger::info("RFID", "Card added to repository: %s", uid.c_str());
                         publish_.publishLog("CardAdded", "SwipeAdd", "Thêm Card thành công");
                         publish_.publishICCardList();
